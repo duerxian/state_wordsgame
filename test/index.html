@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8上单词表</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>8上单词表</h1>
+        
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索单词..." onkeyup="searchWords()">
+            </div>
+            <div class="action-buttons">
+                <button class="add-btn" onclick="showAddModal()">+ 添加单词</button>
+                <button class="save-btn" onclick="saveChanges()">💾 保存</button>
+            </div>
+        </div>
+        
+        <div class="filter-controls">
+            <div class="filter-group">
+                <label for="gradeFilter">grade:</label>
+                <select id="gradeFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                    <option value="7上">7上</option>
+                    <option value="7下">7下</option>
+                    <option value="8上">8上</option>
+                    <option value="8下">8下</option>
+                    <option value="9上">9上</option>
+                    <option value="9下">9下</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="unitFilter">unit:</label>
+                <select id="unitFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="languageFilter">语言:</label>
+                <select id="languageFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                    <option value="english">英文</option>
+                    <option value="meaning">释义</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="posFilter">词性:</label>
+                <select id="posFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="sortFilter">排序:</label>
+                <select id="sortFilter" onchange="applyFilters()">
+                    <option value="id">id</option>
+                    <option value="az">a-z</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <span>总计: <strong id="totalWords">0</strong> 个单词</span>
+            <span>待斩杀单词: <strong id="normalWords">0</strong> 个</span>
+            <span>已斩杀单词: <strong id="killWords">0</strong> 个</span>
+        </div>
+        
+        <div class="word-container">
+            <div class="word-section">
+                <h2>待斩杀单词</h2>
+                <div class="word-list" id="normalWordContainer">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+            <div class="word-section">
+                <h2>已斩杀单词</h2>
+                <div class="word-list" id="killWordContainer">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">添加单词</h2>
+            <div class="form-group">
+                <label for="wordInput">英文单词:</label>
+                <input type="text" id="wordInput" placeholder="输入英文单词">
+            </div>
+            <div class="form-buttons">
+                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn btn-save" onclick="saveWord()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
