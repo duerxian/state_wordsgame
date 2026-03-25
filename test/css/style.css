@@ -135,7 +135,7 @@ h1 {
 .word-container {
     display: flex;
     gap: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 120px;
 }
 
 .word-section {
@@ -376,8 +376,8 @@ h1 {
     padding: 15px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     display: none;
-    max-width: 300px;
-    font-size: 14px;
+    max-width: 360px;
+    font-size: 16px;
 }
 
 .word-tooltip .tooltip-content {
@@ -401,6 +401,7 @@ h1 {
     flex: 1;
     white-space: pre-wrap;
     word-wrap: break-word;
+    align-content: end;
 }
 
 /* 响应式设计 */
