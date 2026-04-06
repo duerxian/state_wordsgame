@@ -492,13 +492,30 @@ function handleWordClick(e) {
 function toggleCheck(id) {
     const wordIndex = words.findIndex(w => w.id === id);
     if (wordIndex === -1) return;
-    words[wordIndex].check = words[wordIndex].check ? 0 : 1;
-    applyFilters();
-    // 保存到Excel
+    
+    // 切换内存状态
+    const newCheckValue = !words[wordIndex].check;
+    words[wordIndex].check = newCheckValue;
+    
+    // 立即更新UI，给用户即时反馈
+    applyFilters(); 
+    
+    // 异步保存到服务器
     fetch(`${API_BASE_URL}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ check: words[wordIndex].check })
+        body: JSON.stringify({ check: newCheckValue ? 1 : 0 })
+    })
+    .then(response => {
+        if (!response.ok) {
+            console.error('保存check状态失败');
+            // 可选：如果失败，回滚状态
+            // words[wordIndex].check = !newCheckValue;
+            // applyFilters();
+        }
+    })
+    .catch(error => {
+        console.error('保存check状态网络错误:', error);
     });
 }
 

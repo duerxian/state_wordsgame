@@ -23,13 +23,30 @@ def load_excel_data():
         if os.path.exists(EXCEL_FILE):
             df = pd.read_excel(EXCEL_FILE)
             print("Excel文件列名:", df.columns.tolist())
+            
+            # 确保列名字符串化，防止因Excel格式问题导致列名类型不一致
+            df.columns = [str(col).strip() for col in df.columns]
+
             if '英文English' in df.columns:
                 for idx, row in df.iterrows():
                     word = str(row['英文English']).strip() if pd.notna(row['英文English']) else ''
+                    
+                    # 加载 kill 状态
                     kill = bool(row.get('kill', False)) if 'kill' in df.columns else False
+                    
+                    # 【新增】加载 check 状态
+                    # 假设Excel中check列存在，若不存在则默认为0
+                    check_val = row.get('check', 0) if 'check' in df.columns else 0
+                    # 处理可能的浮点数情况 (Excel中数字常读为float)
+                    try:
+                        check = int(float(check_val)) if pd.notna(check_val) else 0
+                    except:
+                        check = 0
+
                     grade = str(row.get('Grade', '')).strip() if 'Grade' in df.columns else ''
                     unit = str(row.get('unit', '')).strip() if 'unit' in df.columns else ''
                     pos = str(row.get('词性', '')).strip() if '词性' in df.columns else ''
+                    
                     # 尝试不同的中文释义列名
                     meaning = ''
                     for col in df.columns:
@@ -42,18 +59,20 @@ def load_excel_data():
                             if col in df.columns:
                                 meaning = str(row.get(col, '')).strip() if pd.notna(row.get(col)) else ''
                                 break
+                    
                     # 获取音标
                     phonetic = str(row.get('音标', '')).strip() if pd.notna(row.get('音标', '')) else ''
                     # 获取例句
                     example = str(row.get('例句', '')).strip() if pd.notna(row.get('例句', '')) else ''
                     # 获取联想词
                     related = str(row.get('联想词', '')).strip() if pd.notna(row.get('联想词', '')) else ''
-                    print(f"单词: {word}, 释义: {meaning}")
+                    
                     if word:
                         words_data.append({
                             'id': idx + 1,
                             'word': word,
                             'kill': kill,
+                            'check': check, # 【新增】存入check字段
                             'grade': grade,
                             'unit': unit,
                             'pos': pos,
@@ -66,21 +85,17 @@ def load_excel_data():
         data_loaded = True
     except Exception as e:
         print(f"加载Excel数据失败: {e}")
+        import traceback
+        traceback.print_exc()
 
-# 在每次请求前检查数据是否已加载
-@app.before_request
-def check_data_loaded():
-    global data_loaded
-    if not data_loaded:
-        load_excel_data()
 
-def save_excel_data():
     """保存数据到Excel文件，保留其他列数据"""
     try:
         if not os.path.exists(EXCEL_FILE):
             data = {
                 '英文English': [w['word'] for w in words_data],
-                'kill': [w.get('kill', False) for w in words_data]
+                'kill': [w.get('kill', False) for w in words_data],
+                'check': [w.get('check', 0) for w in words_data] # 【新增】初始化check列
             }
             df = pd.DataFrame(data)
             df.to_excel(EXCEL_FILE, index=False)
@@ -88,20 +103,31 @@ def save_excel_data():
             return
         
         original_df = pd.read_excel(EXCEL_FILE)
+        # 确保列名一致
+        original_df.columns = [str(col).strip() for col in original_df.columns]
         
+        # 如果原始文件中没有check列，添加它
+        if 'check' not in original_df.columns:
+            original_df['check'] = 0
+        if 'kill' not in original_df.columns:
+            original_df['kill'] = False
+
         for idx, row in original_df.iterrows():
             if idx < len(words_data):
-                original_df.at[idx, '英文English'] = words_data[idx]['word']
+                current_word = words_data[idx]
+                original_df.at[idx, '英文English'] = current_word['word']
+                
+                # 更新 kill 列
                 if 'kill' in original_df.columns:
-                    original_df.at[idx, 'kill'] = words_data[idx].get('kill', False)
-                else:
-                    original_df['kill'] = False
-                    original_df.at[idx, 'kill'] = words_data[idx].get('kill', False)
+                    original_df.at[idx, 'kill'] = current_word.get('kill', False)
+                
+                # 【新增】更新 check 列
+                if 'check' in original_df.columns:
+                    original_df.at[idx, 'check'] = current_word.get('check', 0)
         
         # 使用openpyxl设置格式
         from openpyxl import load_workbook
         from openpyxl.styles import Alignment
-        from openpyxl.utils import get_column_letter
         
         # 保存原始数据
         original_df.to_excel(EXCEL_FILE, index=False)
@@ -131,6 +157,90 @@ def save_excel_data():
         print("数据已保存到Excel文件，其他列数据已保留，格式已设置为左对齐、行高30、列宽自动适配")
     except Exception as e:
         print(f"保存Excel数据失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+def save_excel_data():
+    """保存数据到Excel文件，保留其他列数据"""
+    try:
+        if not os.path.exists(EXCEL_FILE):
+            data = {
+                '英文English': [w['word'] for w in words_data],
+                'kill': [w.get('kill', False) for w in words_data],
+                # 【修改】确保 check 列存入的是整数 0 或 1，而不是布尔值
+                'check': [int(w.get('check', 0)) for w in words_data] 
+            }
+            df = pd.DataFrame(data)
+            df.to_excel(EXCEL_FILE, index=False)
+            print("数据已保存到Excel文件")
+            return
+        
+        original_df = pd.read_excel(EXCEL_FILE)
+        # 确保列名一致
+        original_df.columns = [str(col).strip() for col in original_df.columns]
+        
+        # 如果原始文件中没有check列，添加它
+        if 'check' not in original_df.columns:
+            original_df['check'] = 0
+        if 'kill' not in original_df.columns:
+            original_df['kill'] = False
+
+        for idx, row in original_df.iterrows():
+            if idx < len(words_data):
+                current_word = words_data[idx]
+                original_df.at[idx, '英文English'] = current_word['word']
+                
+                # 更新 kill 列
+                if 'kill' in original_df.columns:
+                    original_df.at[idx, 'kill'] = current_word.get('kill', False)
+                
+                # 【新增】更新 check 列
+                if 'check' in original_df.columns:
+                    # 【关键修改】强制转换为 int，确保写入 Excel 的是 1 或 0，而不是 TRUE/FALSE
+                    val = current_word.get('check', 0)
+                    original_df.at[idx, 'check'] = int(val) if val is not None else 0
+        
+        # 使用openpyxl设置格式
+        from openpyxl import load_workbook
+        from openpyxl.styles import Alignment
+        
+        # 保存原始数据
+        original_df.to_excel(EXCEL_FILE, index=False)
+        
+        # 加载工作簿设置格式
+        wb = load_workbook(EXCEL_FILE)
+        ws = wb.active
+        
+        # 设置所有单元格左对齐
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+        
+        # 设置行高30
+        for row in ws.iter_rows():
+            ws.row_dimensions[row[0].row].height = 30
+        
+        # 保持原列宽不变，仅设置自动折行
+        for col in ws.columns:
+            column = col[0].column_letter
+            # 设置自动折行
+            for cell in col:
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        
+        # 保存格式设置
+        wb.save(EXCEL_FILE)
+        print("数据已保存到Excel文件，其他列数据已保留，格式已设置为左对齐、行高30、列宽自动适配")
+    except Exception as e:
+        print(f"保存Excel数据失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+# 在每次请求前检查数据是否已加载
+@app.before_request
+def check_data_loaded():
+    global data_loaded
+    if not data_loaded:
+        load_excel_data()
 
 @app.route('/')
 @app.route('/index.html')
@@ -220,33 +330,34 @@ def add_word():
 @app.route('/api/words/<int:word_id>', methods=['PUT'])
 def update_word(word_id):
     """更新单词"""
+    global words_data
     data = request.get_json()
-    if not data or 'word' not in data:
-        return jsonify({'error': '缺少单词内容'}), 400
     
     word = next((w for w in words_data if w['id'] == word_id), None)
-    if word:
+    if not word:
+        return jsonify({'error': '单词不存在'}), 404
+    
+    if 'word' in data:
         word['word'] = data['word'].strip()
-        # 更新其他属性
-        if 'grade' in data:
-            word['grade'] = data['grade']
-        if 'unit' in data:
-            word['unit'] = data['unit']
-        if 'meaning' in data:
-            word['meaning'] = data['meaning']
-        if 'pos' in data:
-            word['pos'] = data['pos']
-        if 'example' in data:
-            word['example'] = data['example']
-        if 'related' in data:
-            word['related'] = data['related']
-        # 更新kill属性
-        if 'kill' in data:
-            word['kill'] = bool(data['kill'])
-        # 保存到Excel
-        save_excel_data()
-        return jsonify(word)
-    return jsonify({'error': '单词不存在'}), 404
+    if 'grade' in data:
+        word['grade'] = data['grade']
+    if 'unit' in data:
+        word['unit'] = data['unit']
+    if 'meaning' in data:
+        word['meaning'] = data['meaning']
+    if 'pos' in data:
+        word['pos'] = data['pos']
+    if 'example' in data:
+        word['example'] = data['example']
+    if 'related' in data:
+        word['related'] = data['related']
+    if 'check' in data:
+        word['check'] = int(data['check'])
+    if 'kill' in data:
+        word['kill'] = bool(data['kill'])
+    
+    save_excel_data()
+    return jsonify(word)
 
 @app.route('/api/words/<int:word_id>', methods=['DELETE'])
 def delete_word(word_id):
