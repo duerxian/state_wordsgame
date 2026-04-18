@@ -255,6 +255,14 @@ def css():
     with open('css/style.css', 'r', encoding='utf-8') as f:
         return f.read(), 200, {'Content-Type': 'text/css'}
 
+@app.route('/css/balloon.css')
+def balloon_css():
+    try:
+        with open('css/balloon.css', 'r', encoding='utf-8') as f:
+            return f.read(), 200, {'Content-Type': 'text/css'}
+    except FileNotFoundError:
+        return "CSS 文件未找到", 404
+
 @app.route('/js/main.js')
 def js():
     """返回JS文件"""
@@ -273,6 +281,12 @@ def game2_js():
     with open('js/game2.js', 'r', encoding='utf-8') as f:
         return f.read(), 200, {'Content-Type': 'application/javascript'}
 
+@app.route('/js/balloon.js')
+def balloon_js():
+    """返回游戏JS文件"""
+    with open('js/balloon.js', 'r', encoding='utf-8') as f:
+        return f.read(), 200, {'Content-Type': 'application/javascript'}
+
 # 🎵 添加声音文件路由
 @app.route('/sounds/<filename>')
 def serve_sound(filename):
@@ -280,6 +294,12 @@ def serve_sound(filename):
     with open(f'sounds/{filename}', 'rb') as f:
         return f.read(), 200, {'Content-Type': 'audio/mpeg'}
 
+#添加image路由
+@app.route('/images/<filename>')
+def serve_image(filename):
+    """返回图片文件"""
+    with open(f'images/{filename}', 'rb') as f:
+        return f.read(), 200, {'Content-Type': 'image/png'}
 
 @app.route('/api/words', methods=['GET'])
 def get_words():
@@ -398,6 +418,12 @@ def wordgame():
 @app.route('/typing.html')
 def typing():
     with open('typing.html', 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+@app.route('/balloongame.html')
+def balloongame():
+    with open('balloongame.html', 'r', encoding='utf-8') as f:
         return f.read()
 
 if __name__ == '__main__':

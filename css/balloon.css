@@ -1,0 +1,109 @@
+/* 气球游戏样式 */
+body {
+  margin: 0;
+  padding: 0;
+  background-image: url('../images/bg_balloon.jpg');
+  background-size: 100% 100%;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* 顶部控制栏 */
+.top-bar {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-bottom: 2px solid #ccc;
+}
+
+.top-bar select, .top-bar button {
+  padding: 8px 12px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* 右侧单词列表 */
+#word-list {
+  position: absolute;
+  top: 100px;
+  right: 20px;
+  width: 180px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* 气球元素 */
+.balloon {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.balloon:hover {
+  transform: scale(1.1);
+}
+
+.balloon-label {
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 大炮（可拖动） */
+#cannon {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 250px;
+  height: 200px;
+  background-image: url('/images/cannon.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  cursor: grab;
+}
+
+#cannon:active {
+  cursor: grabbing;
+}
+
+/* 胜利/失败提示 */
+#result {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  display: none;
+}
