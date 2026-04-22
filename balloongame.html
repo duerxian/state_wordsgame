@@ -2,65 +2,157 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>气球射击游戏</title>
-  <link rel="stylesheet" href="css/balloon.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="filename" content="balloon-game.html" />
+  <title>打气球单词游戏</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { primary: '#3b82f6' }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/balloon.css" />
 </head>
 <body>
-  <div id="game-container">
-    <!-- 顶部控制栏 -->
-    <div class="top-bar">
-      <select id="level-select">
-        <option value="1">关卡1</option>
-        <option value="2">关卡2</option>
-      </select>
-      <select id="difficulty-select">
-        <option value="easy">难度</option>
-        <option value="medium">中等</option>
-        <option value="hard">困难</option>
-      </select>
-      <select id="mode-select">
-        <option value="normal">方式</option>
-        <option value="time">计时</option>
-      </select>
-      <button id="record-btn">记录</button>
-      <button id="timer-btn">游戏计时</button>
-      <button id="score-btn">得分</button>
-      <button id="penalty-btn">扣分</button>
+<div class="app-container">
+          <div class="nav">
+            <div class="tab-logo">
+                <a href="index.html" class="tab active">wordsgame</a>
+            </div>
+            <div class="tab-container">
+                <a href="index.html" class="tab active">单词表</a>
+                <a href="wordgame.html" class="tab">单词连连看</a>
+                <a href="typing.html" class="tab">打字练习</a>
+                 <a href="balloongame.html" class="tab">气球射击游戏</a>
+            </div>
+        </div>
+  <!-- ── MENU BAR ── -->
+  <div class="menu-bar">
+    <!-- grade -->
+    <div class="dropdown-wrapper">
+      <button class="menu-btn" id="levelBtn">
+        grade7上 <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="dropdown-menu" id="levelMenu">
+        <div class="dropdown-item selected" data-value="关卡1">grade7上</div>
+        <div class="dropdown-item" data-value="关卡2">grade7下</div>
+        <div class="dropdown-item" data-value="关卡3">grade8上</div>
+        <div class="dropdown-item" data-value="关卡3">grade8下</div>
+      </div>
+    </div>
+    <!-- unit -->
+     <div class="dropdown-wrapper" >
+      <button class="menu-btn" id="unitBtn">
+        unit1 <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="dropdown-menu" id="unitMenu">
+        <div class="dropdown-item selected" data-value="unit1">unit1</div>
+        <div class="dropdown-item" data-value="unit2">unit2</div>
+        <div class="dropdown-item" data-value="unit3">unit3</div>
+        <div class="dropdown-item" data-value="unit4">unit4</div>
+        <div class="dropdown-item" data-value="unit5">unit5</div>
+        <div class="dropdown-item" data-value="unit6">unit6</div>
+        <div class="dropdown-item" data-value="unit7">unit7</div>
+        <div class="dropdown-item" data-value="unit8">unit8</div>
+
+      </div>
+     </div>
+
+    <!-- 难度 -->
+    <div class="dropdown-wrapper">
+      <button class="menu-btn" id="diffBtn">
+        难度 <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="dropdown-menu" id="diffMenu">
+        <div class="dropdown-item selected" data-value="easy">简单</div>
+        <div class="dropdown-item" data-value="normal">普通</div>
+        <div class="dropdown-item" data-value="hard">困难</div>
+      </div>
     </div>
 
-    <!-- 右侧单词列表 -->
-    <div id="word-list">
-      flow<br>
-      can<br>
-      pear<br>
-      cake<br>
-      cock<br>
-      egg<br>
-      dog<br>
-      list<br>
-      apple<br>
-      cat<br>
-      tiger
+    <!-- 方式 -->
+    <div class="dropdown-wrapper">
+      <button class="menu-btn" id="modeBtn">
+        鼠标模式 <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="dropdown-menu" id="modeMenu">
+        <div class="dropdown-item selected" data-value="click">鼠标点击</div>
+        <div class="dropdown-item" data-value="keyboard">键盘输入</div>
+        
+      </div>
     </div>
 
-    <!-- 气球（示例） -->
-    <div class="balloon" style="left: 30%; top: 40%; background-color: blue;">
-      <span>cat</span>
+    <!-- 记录 -->
+    <button class="menu-btn" id="recordBtn">
+      <i data-lucide="clipboard-list"></i> 记录
+    </button>
+
+    <!-- Stats -->
+    <div class="stat-box">
+      <span>游戏计时</span>
+      <strong id="timerDisplay">00:00</strong>
     </div>
-    <div class="balloon" style="left: 50%; top: 30%; background-color: red;">
-      <span>apple</span>
+    <div class="stat-box">
+      <span>得分</span>
+      <strong id="scoreDisplay">0</strong>
     </div>
-    <div class="balloon" style="left: 70%; top: 50%; background-color: blue;">
-      <span>tiger</span>
+    <div class="stat-box">
+      <span>扣分</span>
+      <strong id="penaltyDisplay">0</strong>
     </div>
 
-    <!-- 大炮 -->
-    <div id="cannon"></div>
+    <div class="spacer"></div>
 
-    <!-- 结果提示框 -->
-    <div id="result">游戏结束！</div>
+    <button class="start-btn" id="startBtn">开始游戏</button>
   </div>
 
-  <script src="js/balloon.js"></script>
+  <!-- ── GAME AREA ── -->
+  <div class="game-wrapper">
+    <!-- Canvas -->
+    <div style="position:relative; flex:1;">
+      <canvas id="gameCanvas" width="1240" height="640"></canvas>
+      <!-- Overlay -->
+      <div class="overlay" id="overlay">
+        <div class="overlay-box">
+          <h2>🎈 打气球单词游戏</h2>
+          <p>键盘输入单词射击气球，或鼠标点击气球<br>移动船只：← → 方向键</p>
+          <button id="overlayStartBtn">开始游戏</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Word Panel -->
+    <div class="word-panel">
+      <div class="word-panel-title">单词列表</div>
+      <div class="word-list-inner" id="wordList"></div>
+    </div>
+  </div>
+
+  <!-- Input bar (keyboard mode) -->
+  <div style="display:flex;justify-content:center;padding:0 48px 20px;gap:12px;">
+    <input id="wordInput" type="text"
+      placeholder="输入单词后回车射击..."
+      style="width:360px;padding:10px 18px;border:1.5px solid #cbd5e1;border-radius:10px;font-size:15px;outline:none;transition:border-color 0.18s;"
+      autocomplete="off" />
+    <button id="fireBtn"
+      style="padding:10px 28px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(59,130,246,0.35);">
+      发射
+    </button>
+  </div>
+
+</div>
+
+
+<!-- Scripts -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<!-- 引入分离后的游戏逻辑文件 -->
+<script src="js/balloon.js"></script>
 </body>
 </html>
