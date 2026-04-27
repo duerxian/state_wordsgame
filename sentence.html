@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>单词表</title>
+    <title>sentence</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -24,10 +24,10 @@
         
         <div class="controls">
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="搜索单词..." onkeyup="searchWords()">
+                <input type="text" id="searchInput" placeholder="搜索文章..." onkeyup="searchSentences()">
             </div>
             <div class="action-buttons">
-                <button class="add-btn" onclick="showAddModal()">+ 添加单词</button>
+                <button class="add-btn" onclick="showAddModal()">+ 添加文章</button>
                 <button class="save-btn" onclick="saveChanges()">💾 保存</button>
             </div>
         </div>
@@ -43,6 +43,7 @@
                     <option value="8下">8下</option>
                     <option value="9上">9上</option>
                     <option value="9下">9下</option>
+                    <option value="A-Z阅读">A-Z阅读</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -63,22 +64,8 @@
                 <label for="languageFilter">语言:</label>
                 <select id="languageFilter" onchange="applyFilters()">
                     <option value="">无</option>
-                    <option value="english">英文</option>
-                    <option value="meaning">释义</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="posFilter">词性:</label>
-                <select id="posFilter" onchange="applyFilters()">
-                    <option value="">无</option>
-                    <option value="n.">n.</option>
-                    <option value="v.">v.</option>
-                    <option value="adj.">adj.</option>
-                    <option value="adv.">adv.</option>
-                    <option value="prep.">prep.</option>
-                    <option value="conj.">conj.</option>
-                    <option value="pron.">pron.</option>
-                    <option value="interj.">interj.</option>
+                    <option value="english" selected>英文</option>
+                    <option value="meaning">中文</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -90,30 +77,32 @@
                 </select>
             </div>
             <div class="filter-group">
-                <label for="killBgColor">已斩背景:</label>
-                <input type="color" id="killBgColor" value="#e8f5e9" onchange="updateKillWordStyle()">
+                <label for="killFilter">Kill:</label>
+                <select id="killFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                    <option value="no-kill">未斩</option>
+                    <option value="kill">已斩</option>
+                </select>
             </div>
             <div class="filter-group">
-                <label for="killTextColor">已斩字体:</label>
-                <input type="color" id="killTextColor" value="#2e7d32" onchange="updateKillWordStyle()">
+                <label for="checkFilter">Check:</label>
+                <select id="checkFilter" onchange="applyFilters()">
+                    <option value="">无</option>
+                    <option value="unchecked">未检查</option>
+                    <option value="checked">已检查</option>
+                </select>
             </div>
         </div>
-        
-        <div class="stats">
-            <span>总计: <strong id="totalWords">0</strong> 个单词</span>
-            <span>待斩杀单词: <strong id="normalWords">0</strong> 个</span>
-            <span>已斩杀单词: <strong id="killWords">0</strong> 个</span>
-        </div>
-        
+
         <div class="word-container">
             <div class="word-section">
-                <h2>待斩杀单词</h2>
+                <h2>文章列表</h2>
                 <div class="word-list" id="normalWordContainer">
                     <div class="loading">加载中...</div>
                 </div>
             </div>
             <div class="word-section">
-                <h2>已斩杀单词</h2>
+                <h2>文章内容</h2>
                 <div class="word-list" id="killWordContainer">
                     <div class="loading">加载中...</div>
                 </div>
@@ -124,10 +113,10 @@
     <div id="modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
-            <h2 id="modalTitle">添加单词</h2>
+            <h2 id="modalTitle">添加文章</h2>
             <div class="form-group">
-                <label for="wordInput">英文单词:</label>
-                <input type="text" id="wordInput" placeholder="输入英文单词">
+                <label for="wordInput">文章标题:</label>
+                <input type="text" id="wordInput" placeholder="输入文章标题">
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -154,55 +143,26 @@
                         <option value="8">8</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="posInput">词性:</label>
-                    <input type="text" id="posInput" placeholder="输入词性（如n. v.）">
-                </div>
+
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="phoneticInput">音标:</label>
-                    <input type="text" id="phoneticInput" placeholder="输入音标">
-                </div>
-            </div>
+
             <div class="form-group">
-                <label for="meaningInput">释义:</label>
+                <label for="exampleInput">英文</label>
+                <textarea id="exampleInput" placeholder="输入英文文章内容" rows="5"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="meaningInput">中文释义:</label>
                 <input type="text" id="meaningInput" placeholder="输入中文释义">
             </div>
-            <div class="form-group">
-                <label for="exampleInput">例句:</label>
-                <textarea id="exampleInput" placeholder="输入例句，Shift+Enter换行" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="relatedInput">联想词:</label>
-                <input type="text" id="relatedInput" placeholder="输入联想词">
-            </div>
+
             <div class="form-buttons">
                 <button class="btn btn-cancel" onclick="closeModal()">取消</button>
                 <button class="btn btn-save" onclick="saveWord()">保存</button>
             </div>
         </div>
     </div>
-
-    <script src="js/main.js" defer></script>
-    <div id="wordTooltip" class="word-tooltip">
-        <div class="tooltip-content">
-            <div class="tooltip-item">
-                <strong>释义:</strong> <span id="tooltip-meaning"></span>
-            </div>
-            <div class="tooltip-item">
-                <strong>词性:</strong> <span id="tooltip-pos"></span>
-            </div>
-            <div class="tooltip-item">
-                <strong>音标:</strong> <span id="tooltip-phonetic"></span>
-            </div>
-            <div class="tooltip-item">
-                <strong>例句:</strong> <span id="tooltip-example"></span>
-            </div>
-            <div class="tooltip-item">
-                <strong>联想词:</strong> <span id="tooltip-related"></span>
-            </div>
-        </div>
-    </div>
+    
+    <script src="js/sentence.js"></script>
 </body>
 </html>
