@@ -134,26 +134,33 @@ def load_article_data():
                 elif 'grade' in df.columns:
                     grade = str(row['grade']).strip() if pd.notna(row['grade']) else ''
                 
-                # 加载 unit - 对应Excel的unit列
-                unit = str(row.get('unit', '')).strip() if 'unit' in df.columns else ''
+                # 加载 unit - 对应Excel的unit列（优先）或Unit列
+                unit = ''
+                if 'unit' in df.columns:
+                    unit = str(row['unit']).strip() if pd.notna(row['unit']) else ''
+                elif 'Unit' in df.columns:
+                    unit = str(row['Unit']).strip() if pd.notna(row['Unit']) else ''
                 
-                # 加载英文内容 - 对应Excel的English列
+                # 加载英文内容 - 对应Excel的English列（优先）或english列
                 english = ''
                 if 'English' in df.columns:
                     english = str(row['English']).strip() if pd.notna(row['English']) else ''
                 elif 'english' in df.columns:
                     english = str(row['english']).strip() if pd.notna(row['english']) else ''
                 
-                # 加载中文内容 - 对应Excel的Chinese列（优先）或meaning列
+                # 加载中文内容 - 对应Excel的Chinese列（优先）或meaning列或meaning列
                 meaning = ''
                 if 'Chinese' in df.columns:
                     meaning = str(row['Chinese']).strip() if pd.notna(row['Chinese']) else ''
-                elif 'chinese' in df.columns:
-                    meaning = str(row['chinese']).strip() if pd.notna(row['chinese']) else ''
                 elif 'meaning' in df.columns:
                     meaning = str(row['meaning']).strip() if pd.notna(row['meaning']) else ''
                 elif 'Meaning' in df.columns:
                     meaning = str(row['Meaning']).strip() if pd.notna(row['Meaning']) else ''
+                
+                # 加载 translate-word 列
+                translate_word = ''
+                if 'translate-word' in df.columns:
+                    translate_word = str(row['translate-word']).strip() if pd.notna(row['translate-word']) else ''
                 
                 # 加载 check 状态 - 对应Excel的check列
                 check_val = row.get('check', 0) if 'check' in df.columns else 0
@@ -171,7 +178,8 @@ def load_article_data():
                     'grade': grade,
                     'unit': unit,
                     'english': english,
-                    'meaning': meaning
+                    'meaning': meaning,
+                    'translate_word': translate_word
                 })
         print(f"加载了 {len(articles_data)} 篇文章")
         article_loaded = True
@@ -361,6 +369,7 @@ def save_article_to_excel():
                     'unit': article.get('unit', ''),
                     'English': article.get('english', ''),
                     'Chinese': article.get('meaning', ''),
+                    'translate-word': article.get('translate_word', ''),
                     'kill': article.get('kill', False),
                     'check': article.get('check', 0)
                 })
@@ -378,9 +387,9 @@ def save_article_to_excel():
                 # 设置列宽
                 for column in worksheet.columns:
                     column_letter = column[0].column_letter
-                    # English和Chinese列宽设为60，其他列自动调整
-                    if column_letter in ['D', 'E']:  # 假设English是第4列，Chinese是第5列
-                        worksheet.column_dimensions[column_letter].width = 60
+                    # English、Chinese、translate-word列宽设为40，其他列自动调整
+                    if column_letter in ['D', 'E', 'F']:  # 假设English是第4列，Chinese是第5列，translate-word是第6列
+                        worksheet.column_dimensions[column_letter].width = 40
                     else:
                         max_length = 0
                         for cell in column:
@@ -392,24 +401,16 @@ def save_article_to_excel():
                         adjusted_width = min(max_length + 2, 50)
                         worksheet.column_dimensions[column_letter].width = adjusted_width
                 
-                # 设置行高自动匹配内容
-                for row in worksheet.iter_rows(min_row=2):  # 跳过表头
-                    max_height = 25  # 默认行高
-                    for cell in row:
-                        if cell.value:
-                            # 计算内容高度（假设每行20个字符）
-                            lines = len(str(cell.value)) // 20 + 1
-                            cell_height = lines * 10
-                            if cell_height > max_height:
-                                max_height = cell_height
-                    worksheet.row_dimensions[row[0].row].height = max_height
+                # 设置所有行高为40
+                for row in range(2, worksheet.max_row + 1):
+                    worksheet.row_dimensions[row].height = 40
                 
-                # 设置单元格自动换行、垂直居中、左对齐
+                # 设置单元格自动换行、顶对齐、左对齐
                 for row in worksheet.iter_rows(min_row=2):
                     for cell in row:
                         cell.alignment = openpyxl.styles.Alignment(
                             wrap_text=True,
-                            vertical='center',
+                            vertical='top',
                             horizontal='left'
                         )
             
@@ -491,6 +492,11 @@ def get_translation_config():
                         'appid': config.get('baidu_translate', {}).get('app_id', ''),
                         'key': config.get('baidu_translate', {}).get('secret_key', '')
                     },
+                    'baidu_large': {
+                        'configured': bool(config.get('baidu_translate_large', {}).get('app_id')),
+                        'appid': config.get('baidu_translate_large', {}).get('app_id', ''),
+                        'key': config.get('baidu_translate_large', {}).get('secret_key', '')
+                    },
                     'youdao': {
                         'configured': bool(config.get('youdao_translate', {}).get('app_id')),
                         'appkey': config.get('youdao_translate', {}).get('app_id', ''),
@@ -510,6 +516,161 @@ def get_translation_config():
             'message': str(e)
         }), 500
 
+@app.route('/api/test-translation', methods=['GET'])
+def test_translation():
+    """测试翻译 API 配置"""
+    import json
+    import hashlib
+    import random
+    import requests
+    import time
+    
+    results = {}
+    
+    # 读取配置
+    config_file = '翻译平台密钥.json'
+    if not os.path.exists(config_file):
+        return jsonify({'success': False, 'error': '配置文件不存在'})
+    
+    with open(config_file, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    
+    test_word = "test"
+    
+    # 测试百度通用翻译
+    try:
+        baidu_config = config.get('baidu_translate', {})
+        appid = baidu_config.get('app_id', '')
+        key = baidu_config.get('secret_key', '')
+        
+        if appid and key:
+            url = 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+            salt = str(random.randint(32768, 65536))
+            sign_str = appid + test_word + salt + key
+            sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+            
+            params = {
+                'q': test_word,
+                'from': 'en',
+                'to': 'zh',
+                'appid': appid,
+                'salt': salt,
+                'sign': sign
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            result = response.json()
+            
+            if 'error_code' in result:
+                results['baidu_general'] = {
+                    'status': 'error',
+                    'error_code': result['error_code'],
+                    'error_msg': result.get('error_msg', '未知错误')
+                }
+            elif 'trans_result' in result:
+                results['baidu_general'] = {
+                    'status': 'success',
+                    'translation': result['trans_result'][0]['dst']
+                }
+        else:
+            results['baidu_general'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['baidu_general'] = {'status': 'exception', 'error': str(e)}
+    
+    # 测试百度大模型翻译
+    try:
+        baidu_large_config = config.get('baidu_translate_large', {})
+        appid = baidu_large_config.get('app_id', '')
+        key = baidu_large_config.get('secret_key', '')
+        
+        if appid and key:
+            url = 'https://fanyi-api.baidu.com/api/trans/vip/translate_v3'
+            salt = str(random.randint(32768, 65536))
+            curtime = str(int(time.time()))
+            sign_str = appid + test_word + salt + curtime + key
+            sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+            
+            params = {
+                'q': test_word,
+                'from': 'en',
+                'to': 'zh',
+                'appid': appid,
+                'salt': salt,
+                'sign': sign,
+                'action': 0,
+                'curtime': curtime
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            result = response.json()
+            
+            if 'error_code' in result:
+                results['baidu_large'] = {
+                    'status': 'error',
+                    'error_code': result['error_code'],
+                    'error_msg': result.get('error_msg', '未知错误')
+                }
+            elif 'trans_result' in result:
+                results['baidu_large'] = {
+                    'status': 'success',
+                    'translation': result['trans_result'][0]['dst']
+                }
+        else:
+            results['baidu_large'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['baidu_large'] = {'status': 'exception', 'error': str(e)}
+    
+    # 测试有道翻译
+    try:
+        youdao_config = config.get('youdao_translate', {})
+        appkey = youdao_config.get('app_id', '')
+        key = youdao_config.get('secret_key', '')
+        
+        if appkey and key:
+            import uuid
+            url = 'https://openapi.youdao.com/api'
+            salt = str(uuid.uuid1())
+            curtime = str(int(time.time()))
+            sign_str = appkey + test_word + salt + curtime + key
+            sign = hashlib.sha256(sign_str.encode('utf-8')).hexdigest()
+            
+            params = {
+                'q': test_word,
+                'from': 'EN',
+                'to': 'ZH_CHS',
+                'appKey': appkey,
+                'salt': salt,
+                'sign': sign,
+                'signType': 'v3',
+                'curtime': curtime
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            result = response.json()
+            
+            if result.get('errorCode', '0') != '0':
+                results['youdao'] = {
+                    'status': 'error',
+                    'error_code': result['errorCode'],
+                    'error_msg': '有道翻译错误'
+                }
+            elif 'translation' in result:
+                results['youdao'] = {
+                    'status': 'success',
+                    'translation': result['translation'][0]
+                }
+        else:
+            results['youdao'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['youdao'] = {'status': 'exception', 'error': str(e)}
+    
+    return jsonify({
+        'success': True,
+        'results': results,
+        'test_word': test_word
+    })
+
+
 @app.route('/api/translate/baidu', methods=['POST'])
 def translate_baidu():
     """百度翻译API代理"""
@@ -517,12 +678,14 @@ def translate_baidu():
     import hashlib
     import random
     import requests
+    import time
     
     try:
         data = request.get_json()
         text = data.get('text', '')
         appid = data.get('appid', '')
         key = data.get('key', '')
+        model = data.get('model', 'general')  # 'general' 或 'large'
         
         if not text or not appid or not key:
             return jsonify({
@@ -530,25 +693,39 @@ def translate_baidu():
                 'error': '缺少必要参数'
             }), 400
         
-        # 百度翻译API地址
-        url = 'https://fanyi-api.baidu.com/api/trans/vip/translate'
-        
-        # 生成随机盐
-        salt = str(random.randint(32768, 65536))
-        
-        # 生成签名：appid + q + salt + key
-        sign_str = appid + text + salt + key
-        sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
-        
-        # 请求参数
-        params = {
-            'q': text,
-            'from': 'en',
-            'to': 'zh',
-            'appid': appid,
-            'salt': salt,
-            'sign': sign
-        }
+        if model == 'large':
+            # 百度大模型翻译API
+            url = 'https://fanyi-api.baidu.com/api/trans/vip/translate_v3'
+            salt = str(random.randint(32768, 65536))
+            curtime = str(int(time.time()))
+            sign_str = appid + text + salt + curtime + key
+            sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+            
+            params = {
+                'q': text,
+                'from': 'en',
+                'to': 'zh',
+                'appid': appid,
+                'salt': salt,
+                'sign': sign,
+                'action': 0,
+                'curtime': curtime
+            }
+        else:
+            # 百度通用翻译API
+            url = 'https://fanyi-api.baidu.com/api/trans/vip/translate'
+            salt = str(random.randint(32768, 65536))
+            sign_str = appid + text + salt + key
+            sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+            
+            params = {
+                'q': text,
+                'from': 'en',
+                'to': 'zh',
+                'appid': appid,
+                'salt': salt,
+                'sign': sign
+            }
         
         # 发送请求
         response = requests.get(url, params=params, timeout=10)
@@ -556,10 +733,23 @@ def translate_baidu():
         
         # 检查是否有错误
         if 'error_code' in result:
+            error_code = result.get('error_code', '未知错误码')
             error_msg = result.get('error_msg', '未知错误')
+            
+            # 百度翻译API错误码处理
+            error_messages = {
+                '517': '无权限使用该服务，请检查API密钥权限',
+                '520': '请求超时',
+                '530': '签名错误',
+                '900': '参数错误',
+                '901': 'API密钥错误',
+                '902': 'API密钥过期'
+            }
+            
+            error_message = error_messages.get(error_code, error_msg)
             return jsonify({
                 'success': False,
-                'error': f'百度翻译API错误: {error_msg}'
+                'error': f'百度翻译API错误: {error_code} - {error_message}'
             }), 400
         
         # 提取翻译结果

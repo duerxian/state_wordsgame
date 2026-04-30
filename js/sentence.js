@@ -5,6 +5,7 @@ let articles = [];
 let filteredArticles = [];
 let currentSelectedArticle = null; // 保存当前选中的文章
 let words = []; // 存储单词数据用于翻译查询
+// ⭐ 删除 wordTranslationMap，改为基于当前文章的动态查找
 
 // 翻译配置 - 从localStorage加载或使用默认值
 let translationConfig = {
@@ -39,28 +40,51 @@ async function loadTranslationConfig() {
         const data = await response.json();
         
         if (data.success && data.config) {
-            // 自动配置API密钥
+            // ⭐ 始终加载所有可用的翻译配置（不管当前 provider 是什么）
+            
+            // 配置百度通用翻译
             if (data.config.baidu.configured) {
                 translationConfig.baidu.appid = data.config.baidu.appid;
                 translationConfig.baidu.key = data.config.baidu.key;
-                translationConfig.provider = 'baidu';
-                console.log('✅ 已自动配置百度翻译API');
+                console.log('✅ 已加载百度通用翻译配置');
+                
+                // 如果之前没有设置 provider，默认使用百度
+                if (!translationConfig.provider || translationConfig.provider === 'baidu') {
+                    translationConfig.provider = 'baidu';
+                }
             }
             
+            // 配置百度大模型翻译
+            if (data.config.baidu_large.configured) {
+                translationConfig.baidu_large = {
+                    appid: data.config.baidu_large.appid,
+                    key: data.config.baidu_large.key
+                };
+                console.log('✅ 已加载百度大模型翻译配置');
+            }
+            
+            // ⭐ 配置有道翻译（无论百度是否配置，都要加载）
             if (data.config.youdao.configured) {
                 translationConfig.youdao.appkey = data.config.youdao.appkey;
                 translationConfig.youdao.key = data.config.youdao.key;
+                console.log('✅ 已加载有道翻译配置');
                 
-                // 如果百度未配置，使用有道
-                if (!data.config.baidu.configured) {
+                // 只有在百度未配置时，才将有道设为默认 provider
+                if (!data.config.baidu.configured && !translationConfig.provider) {
                     translationConfig.provider = 'youdao';
-                    console.log('✅ 已自动配置有道翻译API');
+                    console.log('✅ 设置有道为默认翻译服务');
                 }
             }
             
             // 保存到localStorage，下次直接使用
             localStorage.setItem('translationConfig', JSON.stringify(translationConfig));
             console.log('✅ 翻译配置已保存到localStorage');
+            console.log('📋 当前可用翻译服务:', {
+                baidu: data.config.baidu.configured,
+                baidu_large: data.config.baidu_large?.configured || false,
+                youdao: data.config.youdao.configured,
+                current_provider: translationConfig.provider
+            });
         } else {
             console.warn('⚠️ 未找到翻译API配置，请前往 config.html 页面配置');
         }
@@ -86,10 +110,151 @@ async function initPage() {
         
         console.log('加载的文章数据:', articles);
         console.log('加载的单词数据:', words.length, '个单词');
+        
         applyFilters();
     } catch (error) {
         console.error('初始化页面失败:', error);
     }
+}
+
+// ⭐ 从当前文章的 translate-word 列中查找单词的翻译（基于位置对应）
+function getTranslationFromCurrentArticle(word, wordIndex) {
+    if (!currentSelectedArticle || !currentSelectedArticle.translate_word) {
+        return null;
+    }
+    
+    const englishText = currentSelectedArticle.english || '';
+    const translateWordText = currentSelectedArticle.translate_word || '';
+    
+    if (!englishText || !translateWordText) {
+        return null;
+    }
+    
+    // ⭐ 关键修复：按相同的方式分段处理英文和中文
+    const englishLines = englishText.split(/\n/).filter(line => line.trim());
+    const chineseLines = translateWordText.split(/\n/).filter(line => line.trim());
+    
+    // 构建所有单词的列表及其对应的行号和行内索引
+    const allWords = [];
+    let globalIndex = 0;
+    
+    englishLines.forEach((line, lineIdx) => {
+        const wordsInLine = line.match(/[a-zA-Z]+(?:['-][a-zA-Z]+)*/g) || [];
+        wordsInLine.forEach(word => {
+            allWords.push({
+                word: word,
+                globalIndex: globalIndex,
+                lineIndex: lineIdx,
+                indexInLine: allWords.filter(w => w.lineIndex === lineIdx).length
+            });
+            globalIndex++;
+        });
+    });
+    
+    // 构建所有翻译的列表
+    const allTranslations = [];
+    chineseLines.forEach((line, lineIdx) => {
+        let translationsInLine = [];
+        if (line.includes('/')) {
+            translationsInLine = line.split('/').filter(t => t.trim());
+        } else {
+            translationsInLine = line.split(/[,;，；\s]+/).filter(t => t.trim());
+        }
+        
+        translationsInLine.forEach(trans => {
+            allTranslations.push({
+                translation: trans,
+                lineIndex: lineIdx
+            });
+        });
+    });
+    
+    console.log(`🔍 解析翻译 - 英文行数: ${englishLines.length}, 中文行数: ${chineseLines.length}`);
+    console.log(`🔍 英文单词总数: ${allWords.length}, 中文翻译总数: ${allTranslations.length}`);
+    
+    // 检查索引是否有效
+    if (wordIndex >= 0 && wordIndex < allWords.length && wordIndex < allTranslations.length) {
+        const targetWord = allWords[wordIndex];
+        const clickedWordLower = word.toLowerCase();
+        const currentWordLower = targetWord.word.toLowerCase();
+        
+        if (currentWordLower === clickedWordLower) {
+            const translation = allTranslations[wordIndex].translation;
+            console.log(`✅ 本地翻译（位置匹配）: "${word}" (全局位置${wordIndex}, 第${targetWord.lineIndex + 1}行) -> "${translation}"`);
+            return translation;
+        } else {
+            console.warn(`⚠️ 位置不匹配: 期望 "${clickedWordLower}"，实际 "${currentWordLower}" (位置${wordIndex})`);
+        }
+    } else {
+        console.warn(`⚠️ 索引越界: wordIndex=${wordIndex}, 英文单词数=${allWords.length}, 中文翻译数=${allTranslations.length}`);
+    }
+    
+    return null;
+}
+
+// ⭐ 在文章中查找单词的所有出现位置及其翻译
+function findAllWordTranslationsInArticle(word) {
+    if (!currentSelectedArticle || !currentSelectedArticle.translate_word) {
+        return [];
+    }
+    
+    const englishText = currentSelectedArticle.english || '';
+    const translateWordText = currentSelectedArticle.translate_word || '';
+    
+    if (!englishText || !translateWordText) {
+        return [];
+    }
+    
+    // ⭐ 关键修复：按相同的方式分段处理英文和中文
+    const englishLines = englishText.split(/\n/).filter(line => line.trim());
+    const chineseLines = translateWordText.split(/\n/).filter(line => line.trim());
+    
+    // 构建所有单词的列表
+    const allWords = [];
+    let globalIndex = 0;
+    
+    englishLines.forEach((line, lineIdx) => {
+        const wordsInLine = line.match(/[a-zA-Z]+(?:['-][a-zA-Z]+)*/g) || [];
+        wordsInLine.forEach(word => {
+            allWords.push({
+                word: word,
+                globalIndex: globalIndex
+            });
+            globalIndex++;
+        });
+    });
+    
+    // 构建所有翻译的列表
+    const allTranslations = [];
+    chineseLines.forEach((line, lineIdx) => {
+        let translationsInLine = [];
+        if (line.includes('/')) {
+            translationsInLine = line.split('/').filter(t => t.trim());
+        } else {
+            translationsInLine = line.split(/[,;，；\s]+/).filter(t => t.trim());
+        }
+        
+        translationsInLine.forEach(trans => {
+            allTranslations.push({
+                translation: trans
+            });
+        });
+    });
+    
+    const results = [];
+    const targetWord = word.toLowerCase();
+    
+    // 查找所有匹配的单词位置
+    for (let i = 0; i < allWords.length; i++) {
+        if (allWords[i].word.toLowerCase() === targetWord && i < allTranslations.length) {
+            results.push({
+                index: i,
+                translation: allTranslations[i].translation
+            });
+        }
+    }
+    
+    return results;
 }
 
 // 筛选文章
@@ -173,7 +338,130 @@ function applyFilters() {
     if (currentSelectedArticle) {
         renderArticleContent(currentSelectedArticle);
     }
+    
+    // 测试翻译API连接
+    testTranslationAPI();
 }
+
+// 测试翻译API连接
+async function testTranslationAPI() {
+    const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
+    const testWord = 'test';
+    
+    console.log(`🧪 测试${transFilter}翻译API连接...`);
+    
+    try {
+        // ⭐ 传入 transFilter 参数
+        const config = getCurrentTranslationConfig(transFilter);
+        if (!config.valid) {
+            console.error(`❌ 翻译配置无效: ${config.message}`);
+            return;
+        }
+        
+        let translation;
+        if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
+            translation = await translateWithBaidu(testWord, config.appid, config.key, transFilter === 'baidu-large' ? 'large' : 'general');
+        } else if (transFilter === 'youdao') {
+            translation = await translateWithYoudao(testWord, config.appkey, config.key);
+        } else if (transFilter === 'local') {
+            translation = getLocalTranslation(testWord);
+            console.log(`✅ 本地翻译测试成功: "${testWord}" → "${translation}"`);
+            return;
+        }
+        
+        if (translation) {
+            console.log(`✅ ${transFilter}翻译API连接成功: "${testWord}" → "${translation}"`);
+        } else {
+            console.error(`❌ ${transFilter}翻译API测试失败: 无翻译结果`);
+        }
+    } catch (error) {
+        console.error(`❌ ${transFilter}翻译API测试失败: ${error.message}`);
+    }
+}
+
+// 测试所有翻译 API
+async function testAllTranslationAPIs() {
+    console.log('🧪 开始测试所有翻译 API...');
+    
+    try {
+        const response = await fetch('/api/test-translation');
+        const data = await response.json();
+        
+        if (!data.success) {
+            console.error('❌ 测试失败:', data.error);
+            alert('测试失败: ' + data.error);
+            return;
+        }
+        
+        console.log('📊 测试结果:', data);
+        
+        let message = '翻译 API 测试结果:\n\n';
+        const results = data.results;
+        
+        // 百度通用翻译
+        if (results.baidu_general) {
+            message += '【百度通用翻译】\n';
+            if (results.baidu_general.status === 'success') {
+                message += `✅ 成功 - "${data.test_word}" → "${results.baidu_general.translation}"\n`;
+            } else if (results.baidu_general.status === 'error') {
+                message += `❌ 失败 - 错误码: ${results.baidu_general.error_code}\n`;
+                message += `   错误信息: ${results.baidu_general.error_msg}\n`;
+            } else if (results.baidu_general.status === 'not_configured') {
+                message += `⚠️ 未配置\n`;
+            } else {
+                message += `❌ 异常: ${results.baidu_general.error}\n`;
+            }
+            message += '\n';
+        }
+        
+        // 百度大模型翻译
+        if (results.baidu_large) {
+            message += '【百度大模型翻译】\n';
+            if (results.baidu_large.status === 'success') {
+                message += `✅ 成功 - "${data.test_word}" → "${results.baidu_large.translation}"\n`;
+            } else if (results.baidu_large.status === 'error') {
+                message += `❌ 失败 - 错误码: ${results.baidu_large.error_code}\n`;
+                message += `   错误信息: ${results.baidu_large.error_msg}\n`;
+                
+                // 提供解决方案
+                if (results.baidu_large.error_code === '517') {
+                    message += `\n💡 提示: 该密钥可能未开通"大模型翻译"服务\n`;
+                    message += `   请前往百度翻译开放平台开通服务\n`;
+                    message += `   网址: https://fanyi-api.baidu.com/api/trans/product/apipro\n`;
+                }
+            } else if (results.baidu_large.status === 'not_configured') {
+                message += `⚠️ 未配置\n`;
+            } else {
+                message += `❌ 异常: ${results.baidu_large.error}\n`;
+            }
+            message += '\n';
+        }
+        
+        // 有道翻译
+        if (results.youdao) {
+            message += '【有道翻译】\n';
+            if (results.youdao.status === 'success') {
+                message += `✅ 成功 - "${data.test_word}" → "${results.youdao.translation}"\n`;
+            } else if (results.youdao.status === 'error') {
+                message += `❌ 失败 - 错误码: ${results.youdao.error_code}\n`;
+            } else if (results.youdao.status === 'not_configured') {
+                message += `⚠️ 未配置\n`;
+            } else {
+                message += `❌ 异常: ${results.youdao.error}\n`;
+            }
+            message += '\n';
+        }
+        
+        console.log(message);
+        alert(message);
+        
+    } catch (error) {
+        console.error('❌ 测试异常:', error);
+        alert('测试异常: ' + error.message);
+    }
+}
+
+// ⭐ 删除 showLocalTranslationStats，因为不再维护全局映射表
 
 // 渲染文章列表
 function renderArticles(articles) {
@@ -230,12 +518,8 @@ function renderArticleContent(article) {
     if (languageFilter === 'english') {
         // 只显示英文内容（Excel的English列），并将单词包装成可点击元素
         if (article.english) {
-            const sentences = splitIntoSentences(article.english);
-            const clickableSentences = sentences.map(sentence => {
-                const clickableText = makeWordsClickable(sentence);
-                return `<div class="sentence-line">${clickableText}</div>`;
-            }).join('');
-            contentHtml += `<div class="english-content">${clickableSentences}</div>`;
+            const clickableText = makeWordsClickableWithIndex(article.english);
+            contentHtml += `<div class="english-content">${clickableText}</div>`;
         } else {
             contentHtml += `<div class="no-data">暂无英文内容</div>`;
         }
@@ -253,12 +537,8 @@ function renderArticleContent(article) {
     } else {
         // 无筛选时，同时显示英文和中文
         if (article.english) {
-            const sentences = splitIntoSentences(article.english);
-            const clickableSentences = sentences.map(sentence => {
-                const clickableText = makeWordsClickable(sentence);
-                return `<div class="sentence-line">${clickableText}</div>`;
-            }).join('');
-            contentHtml += `<div class="english-content">${clickableSentences}</div>`;
+            const clickableText = makeWordsClickableWithIndex(article.english);
+            contentHtml += `<div class="english-content">${clickableText}</div>`;
         }
         if (article.meaning) {
             const sentences = splitIntoSentences(article.meaning);
@@ -297,10 +577,31 @@ function splitIntoSentences(text) {
     return sentences;
 }
 
-// 将英文文本中的单词包装成可点击的元素
-function makeWordsClickable(text) {
-    // 使用正则表达式匹配单词（包括连字符和撇号），保留所有非字母字符不变
-    return text.replace(/([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g, '<span class="clickable-word" data-word="$1">$1</span>');
+// 将英文文本中的单词包装成可点击的元素，并添加全局位置索引
+function makeWordsClickableWithIndex(text) {
+    if (!text) return '';
+    
+    // 按换行符分割成多行
+    const lines = text.split(/\n/);
+    let globalWordIndex = 0; // 全局单词索引
+    
+    const processedLines = lines.map(line => {
+        line = line.trim();
+        if (!line) return '';
+        
+        // 使用正则表达式匹配单词，并为每个单词添加 data-index 属性
+        let wordIndexInLine = 0;
+        const processedLine = line.replace(/([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g, (match) => {
+            const span = `<span class="clickable-word" data-word="${match}" data-index="${globalWordIndex}">${match}</span>`;
+            globalWordIndex++;
+            wordIndexInLine++;
+            return span;
+        });
+        
+        return `<div class="sentence-line">${processedLine}</div>`;
+    });
+    
+    return processedLines.join('');
 }
 
 // 为所有可点击的单词添加事件监听
@@ -316,6 +617,7 @@ async function handleWordClick(e) {
     e.stopPropagation();
     const wordElement = e.target;
     const word = wordElement.dataset.word;
+    const wordIndex = parseInt(wordElement.dataset.index); // ⭐ 获取单词的位置索引
     
     if (!word) return;
     
@@ -360,7 +662,7 @@ async function handleWordClick(e) {
         }
     } else {
         // 正常流程，优先本地缓存
-        translation = await getWordTranslation(word);
+        translation = await getWordTranslation(word, wordIndex); // ⭐ 传入位置索引
     }
     showWordTranslation(wordElement, translation);
 }
@@ -395,48 +697,110 @@ function speakWord(word) {
     }
 }
 
-// 获取单词翻译 - 优先本地，其次API
-async function getWordTranslation(word) {
-    // 首先尝试从本地单词数据中查找
+// 获取单词翻译 - 智能降级策略
+async function getWordTranslation(word, wordIndex = -1) {
+    const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
+    
+    // ⭐ 如果选择本地翻译模式，直接使用本地数据
+    if (transFilter === 'local') {
+        const translation = getLocalTranslation(word, wordIndex);
+        console.log(`🗄️ 本地翻译: "${word}" → "${translation}"`);
+        return translation;
+    }
+    
+    // ⭐ 第一优先级：从当前文章的 translate-word 列中查找（基于位置）
+    if (wordIndex >= 0 && currentSelectedArticle) {
+        const articleTranslation = getTranslationFromCurrentArticle(word, wordIndex);
+        if (articleTranslation) {
+            console.log(`✅ 使用文章翻译（位置匹配）: "${word}" → "${articleTranslation}"`);
+            return articleTranslation;
+        }
+    }
+    
+    // ⭐ 第二优先级：从单词表（words数组）中查找
     const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
     if (localWord && localWord.meaning) {
+        console.log(`✅ 使用单词表翻译: "${word}" → "${localWord.meaning}"`);
         return localWord.meaning;
     }
     
-    // 如果本地没有，尝试使用翻译API
+    // ⭐ 第三优先级：尝试使用翻译API
     try {
-        const apiTranslation = await translateWithAPI(word);
+        const apiTranslation = await translateWithAPI(word, transFilter);
         if (apiTranslation) {
             console.log(`✅ API翻译成功: "${word}" → "${apiTranslation}"`);
+            
+            // 将API翻译结果保存到本地单词表，下次可以直接使用
+            const existingWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
+            if (existingWord) {
+                existingWord.meaning = apiTranslation;
+            } else {
+                words.push({ word: word, meaning: apiTranslation });
+            }
+            
             return apiTranslation;
         }
     } catch (error) {
         console.warn(`⚠️ API翻译失败: ${error.message}`);
     }
     
-    // 如果API也失败，返回提示信息
+    // ⭐ 第四优先级：返回友好提示
+    console.log(`⚠️ 无法获取翻译: ${word}`);
     return '暂无翻译';
 }
 
+// 本地翻译 - 优先使用当前文章的 translate-word 列数据
+function getLocalTranslation(word, wordIndex = -1) {
+    if (!word) return '缺少释义';
+    
+    const lowerWord = word.toLowerCase();
+    
+    // ⭐ 第一优先级：如果有位置索引且当前有选中的文章，从文章中查找
+    if (wordIndex >= 0 && currentSelectedArticle) {
+        const articleTranslation = getTranslationFromCurrentArticle(word, wordIndex);
+        if (articleTranslation) {
+            return articleTranslation;
+        }
+    }
+    
+    // ⭐ 第二优先级：从单词表（words数组）中查找
+    const localWord = words.find(w => w.word.toLowerCase() === lowerWord);
+    if (localWord && localWord.meaning) {
+        console.log(`✅ 本地翻译（单词表）: ${word} -> ${localWord.meaning}`);
+        return localWord.meaning;
+    }
+    
+    // ⭐ 第三优先级：返回提示
+    console.log(`⚠️ 本地无翻译: ${word}`);
+    return '缺少释义';
+}
+
 // 使用翻译API翻译单词
-async function translateWithAPI(word) {
-    const config = getCurrentTranslationConfig();
+async function translateWithAPI(word, transFilter) {
+    // ⭐ 传入 transFilter 参数获取对应的配置
+    const config = getCurrentTranslationConfig(transFilter);
     
     if (!config.valid) {
         throw new Error(config.message);
     }
     
-    // 根据配置的provider选择翻译服务
-    if (config.provider === 'baidu') {
-        return await translateWithBaidu(word, config.appid, config.key);
-    } else {
+    // 根据筛选条件选择翻译服务
+    if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
+        return await translateWithBaidu(word, config.appid, config.key, transFilter === 'baidu-large' ? 'large' : 'general');
+    } else if (transFilter === 'youdao') {
         return await translateWithYoudao(word, config.appkey, config.key);
+    } else {
+        // 默认使用百度通用翻译
+        return await translateWithBaidu(word, config.appid, config.key, 'general');
     }
 }
 
 // 获取当前有效的翻译配置
-function getCurrentTranslationConfig() {
-    if (translationConfig.provider === 'baidu') {
+function getCurrentTranslationConfig(transFilter) {
+    // ⭐ 根据 transFilter 参数动态选择配置
+    
+    if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
+        // 百度翻译（通用或大模型）
         if (!translationConfig.baidu.appid || !translationConfig.baidu.key) {
             return { valid: false, message: '百度翻译未配置' };
         }
@@ -446,7 +810,8 @@ function getCurrentTranslationConfig() {
             appid: translationConfig.baidu.appid,
             key: translationConfig.baidu.key
         };
-    } else {
+    } else if (transFilter === 'youdao') {
+        // 有道翻译
         if (!translationConfig.youdao.appkey || !translationConfig.youdao.key) {
             return { valid: false, message: '有道翻译未配置' };
         }
@@ -456,11 +821,34 @@ function getCurrentTranslationConfig() {
             appkey: translationConfig.youdao.appkey,
             key: translationConfig.youdao.key
         };
+    } else {
+        // 默认使用当前 provider
+        if (translationConfig.provider === 'baidu') {
+            if (!translationConfig.baidu.appid || !translationConfig.baidu.key) {
+                return { valid: false, message: '百度翻译未配置' };
+            }
+            return { 
+                valid: true, 
+                provider: 'baidu',
+                appid: translationConfig.baidu.appid,
+                key: translationConfig.baidu.key
+            };
+        } else {
+            if (!translationConfig.youdao.appkey || !translationConfig.youdao.key) {
+                return { valid: false, message: '有道翻译未配置' };
+            }
+            return { 
+                valid: true, 
+                provider: 'youdao',
+                appkey: translationConfig.youdao.appkey,
+                key: translationConfig.youdao.key
+            };
+        }
     }
 }
 
 // 百度翻译API（通过本地代理服务器）
-async function translateWithBaidu(text, appid, key) {
+async function translateWithBaidu(text, appid, key, model = 'general') {
     const proxyUrl = '/api/translate/baidu';
     
     try {
@@ -472,7 +860,8 @@ async function translateWithBaidu(text, appid, key) {
             body: JSON.stringify({
                 text: text,
                 appid: appid,
-                key: key
+                key: key,
+                model: model
             })
         });
         

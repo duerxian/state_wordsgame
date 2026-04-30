@@ -93,6 +93,18 @@
                 </select>
             </div>
             <div class="filter-group">
+                <label for="transFilter">翻译方式:</label>
+                <select id="transFilter" onchange="applyFilters()">
+                    <option value="baidu-general" selected>百度通用翻译</option>
+                    <option value="baidu-large">百度大模型翻译</option>
+                    <option value="youdao">有道翻译</option>
+                    <option value="local">本地翻译</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <button class="test-btn" onclick="testAllTranslationAPIs()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">🧪 测试所有翻译API</button>
+            </div>
+            <div class="filter-group">
                 <p>提示:</p>
                 <p>ctrl+左键强制调用翻译API</p>
             </div>
