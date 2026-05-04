@@ -301,6 +301,9 @@ async function searchWords() {
     
     try {
         const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const results = await response.json();
         
         const gradeFilter = document.getElementById('gradeFilter').value;
@@ -345,6 +348,52 @@ async function searchWords() {
         initDragAndDrop();
     } catch (error) {
         console.error('搜索失败:', error);
+        // 本地搜索备选方案
+        const lowerQuery = query.toLowerCase();
+        const localResults = words.filter(word => {
+            return word.word.toLowerCase().includes(lowerQuery) ||
+                   (word.meaning && word.meaning.toLowerCase().includes(lowerQuery)) ||
+                   (word.example && word.example.toLowerCase().includes(lowerQuery)) ||
+                   (word.related && word.related.toLowerCase().includes(lowerQuery));
+        });
+        
+        const gradeFilter = document.getElementById('gradeFilter').value;
+        const unitFilter = document.getElementById('unitFilter').value;
+        const languageFilter = document.getElementById('languageFilter').value;
+        const posFilter = document.getElementById('posFilter').value;
+        const sortFilter = document.getElementById('sortFilter').value;
+        
+        let filteredResults = [...localResults];
+        
+        if (gradeFilter) {
+            filteredResults = filteredResults.filter(word => word.grade === gradeFilter);
+        }
+        
+        if (unitFilter) {
+            filteredResults = filteredResults.filter(word => {
+                return String(word.unit) === unitFilter;
+            });
+        }
+        
+        if (posFilter) {
+            filteredResults = filteredResults.filter(word => {
+                if (!word.pos) return false;
+                const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
+                return posList.includes(posFilter);
+            });
+        }
+        
+        if (sortFilter === 'az') {
+            filteredResults.sort((a, b) => a.word.localeCompare(b.word));
+        } else if (sortFilter === 'random') {
+            filteredResults.sort(() => Math.random() - 0.5);
+        } else {
+            filteredResults.sort((a, b) => a.id - b.id);
+        }
+        
+        renderWords(filteredResults, languageFilter);
+        updateStats(filteredResults);
+        initDragAndDrop();
     }
 }
 

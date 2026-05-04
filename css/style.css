@@ -776,7 +776,7 @@ h1 {
 /* 单词翻译显示样式 - 在单词正下方 */
 .word-translation {
     display: block;
-    color: #b973bd;
+    color: #e24c31;
     font-size: 14px;
     position: absolute;
     top: 100%;

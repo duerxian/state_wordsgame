@@ -646,24 +646,28 @@ async function handleWordClick(e) {
     // 获取翻译并显示
     let translation;
     if (e.ctrlKey) {
-        // CTRL+左键直接调用翻译API并覆盖缓存
-        console.log(`🔄 强制调用API翻译: ${word}`);
-        translation = await translateWithAPI(word);
-        if (translation) {
-            // 更新本地单词数据
-            const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
-            if (localWord) {
-                localWord.meaning = translation;
+            // CTRL+左键直接调用翻译API并覆盖缓存
+            const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
+            const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
+            console.log(`🔄 强制调用${apiName}: ${word}`);
+            translation = await translateWithAPI(word, transFilter);
+            if (translation) {
+                // 更新本地单词数据
+                const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
+                if (localWord) {
+                    localWord.meaning = translation;
+                    console.log(`✅ 已更新缓存: "${word}" → "${translation}"`);
+                } else {
+                    words.push({ word: word, meaning: translation });
+                    console.log(`✅ 已添加到缓存: "${word}" → "${translation}"`);
+                }
             } else {
-                words.push({ word: word, meaning: translation });
+                translation = '暂无翻译';
             }
         } else {
-            translation = '暂无翻译';
+            // 正常流程，优先本地缓存
+            translation = await getWordTranslation(word, wordIndex); // ⭐ 传入位置索引
         }
-    } else {
-        // 正常流程，优先本地缓存
-        translation = await getWordTranslation(word, wordIndex); // ⭐ 传入位置索引
-    }
     showWordTranslation(wordElement, translation);
 }
 
@@ -701,34 +705,19 @@ function speakWord(word) {
 async function getWordTranslation(word, wordIndex = -1) {
     const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
     
-    // ⭐ 如果选择本地翻译模式，直接使用本地数据
-    if (transFilter === 'local') {
-        const translation = getLocalTranslation(word, wordIndex);
-        console.log(`🗄️ 本地翻译: "${word}" → "${translation}"`);
-        return translation;
-    }
-    
-    // ⭐ 第一优先级：从当前文章的 translate-word 列中查找（基于位置）
-    if (wordIndex >= 0 && currentSelectedArticle) {
-        const articleTranslation = getTranslationFromCurrentArticle(word, wordIndex);
-        if (articleTranslation) {
-            console.log(`✅ 使用文章翻译（位置匹配）: "${word}" → "${articleTranslation}"`);
-            return articleTranslation;
-        }
-    }
-    
-    // ⭐ 第二优先级：从单词表（words数组）中查找
+    // ⭐ 第一优先级：从单词表（words数组）中查找
     const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
     if (localWord && localWord.meaning) {
-        console.log(`✅ 使用单词表翻译: "${word}" → "${localWord.meaning}"`);
+        console.log(`✅ 使用缓存翻译: "${word}" → "${localWord.meaning}"`);
         return localWord.meaning;
     }
     
-    // ⭐ 第三优先级：尝试使用翻译API
+    // ⭐ 第二优先级：尝试使用翻译API
     try {
         const apiTranslation = await translateWithAPI(word, transFilter);
         if (apiTranslation) {
-            console.log(`✅ API翻译成功: "${word}" → "${apiTranslation}"`);
+            const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
+            console.log(`✅ 使用${apiName}: "${word}" → "${apiTranslation}"`);
             
             // 将API翻译结果保存到本地单词表，下次可以直接使用
             const existingWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
@@ -741,10 +730,11 @@ async function getWordTranslation(word, wordIndex = -1) {
             return apiTranslation;
         }
     } catch (error) {
-        console.warn(`⚠️ API翻译失败: ${error.message}`);
+        const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
+        console.warn(`⚠️ ${apiName}翻译失败: ${error.message}`);
     }
     
-    // ⭐ 第四优先级：返回友好提示
+    // ⭐ 第三优先级：返回友好提示
     console.log(`⚠️ 无法获取翻译: ${word}`);
     return '暂无翻译';
 }

@@ -6,7 +6,7 @@ import openpyxl
 from openpyxl.styles import Alignment
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Excel文件路径
 EXCEL_FILE = '8上-下单词表.xlsx'
@@ -35,6 +35,15 @@ def load_excel_data():
             if '英文English' in df.columns:
                 for idx, row in df.iterrows():
                     word = str(row['英文English']).strip() if pd.notna(row['英文English']) else ''
+                    
+                    # 加载 id，如果Excel中存在id列则使用它，否则使用 idx + 1
+                    if 'id' in df.columns and pd.notna(row['id']):
+                        try:
+                            word_id = int(row['id'])
+                        except:
+                            word_id = idx + 1
+                    else:
+                        word_id = idx + 1
                     
                     # 加载 kill 状态
                     kill = bool(row.get('kill', False)) if 'kill' in df.columns else False
@@ -74,7 +83,7 @@ def load_excel_data():
                     
                     if word:
                         words_data.append({
-                            'id': idx + 1,
+                            'id': word_id,
                             'word': word,
                             'kill': kill,
                             'check': check, # 【新增】存入check字段
@@ -304,6 +313,127 @@ def get_words():
     """获取所有单词"""
     return jsonify(words_data)
 
+@app.route('/api/words/search', methods=['GET'])
+def search_words():
+    """搜索单词"""
+    global words_data
+    query = request.args.get('q', '').strip().lower()
+    
+    if not query:
+        return jsonify([])
+    
+    # 搜索逻辑：匹配单词、释义、例句等
+    results = []
+    for word in words_data:
+        match = False
+        # 匹配单词
+        if query in word.get('word', '').lower():
+            match = True
+        # 匹配释义
+        elif query in word.get('meaning', '').lower():
+            match = True
+        # 匹配例句
+        elif query in word.get('example', '').lower():
+            match = True
+        # 匹配联想词
+        elif query in word.get('related', '').lower():
+            match = True
+        
+        if match:
+            results.append(word)
+    
+    return jsonify(results)
+
+@app.route('/api/words/<int:word_id>', methods=['PUT'])
+def update_word(word_id):
+    """更新单词"""
+    global words_data
+    data = request.get_json()
+    
+    word = next((w for w in words_data if w['id'] == word_id), None)
+    if not word:
+        return jsonify({'error': '单词不存在'}), 404
+    
+    if 'word' in data:
+        word['word'] = data['word'].strip()
+    if 'grade' in data:
+        word['grade'] = data['grade']
+    if 'unit' in data:
+        word['unit'] = data['unit']
+    if 'pos' in data:
+        word['pos'] = data['pos']
+    if 'meaning' in data:
+        word['meaning'] = data['meaning']
+    if 'phonetic' in data:
+        word['phonetic'] = data['phonetic']
+    if 'example' in data:
+        word['example'] = data['example']
+    if 'related' in data:
+        word['related'] = data['related']
+    if 'check' in data:
+        word['check'] = int(data['check'])
+    if 'kill' in data:
+        word['kill'] = bool(data['kill'])
+    
+    save_words_to_excel()
+    return jsonify(word)
+
+@app.route('/api/words', methods=['POST'])
+def add_word():
+    """添加新单词"""
+    global words_data
+    data = request.get_json()
+    if not data or 'word' not in data:
+        return jsonify({'error': '缺少单词内容'}), 400
+    
+    # 检查单词是否已存在
+    word_text = data['word'].strip().lower()
+    existing_word = next((w for w in words_data if w['word'].lower() == word_text), None)
+    if existing_word:
+        return jsonify({'error': '单词已存在'}), 400
+    
+    new_id = max([w['id'] for w in words_data], default=0) + 1
+    new_word = {
+        'id': new_id,
+        'word': data['word'].strip(),
+        'grade': data.get('grade', ''),
+        'unit': data.get('unit', ''),
+        'pos': data.get('pos', ''),
+        'meaning': data.get('meaning', ''),
+        'phonetic': data.get('phonetic', ''),
+        'example': data.get('example', ''),
+        'related': data.get('related', ''),
+        'kill': False,
+        'check': 0
+    }
+    words_data.append(new_word)
+    
+    # 保存到Excel
+    save_words_to_excel()
+    
+    return jsonify(new_word), 201
+
+@app.route('/api/words/<int:word_id>', methods=['DELETE'])
+def delete_word(word_id):
+    """删除单词"""
+    global words_data
+    words_data = [w for w in words_data if w['id'] != word_id]
+    # 保存到Excel
+    save_words_to_excel()
+    return jsonify({'message': '单词已删除'})
+
+@app.route('/api/words/save-all', methods=['POST'])
+def save_all_words():
+    """批量保存所有单词到Excel"""
+    global words_data
+    data = request.get_json()
+    if not data or 'words' not in data:
+        return jsonify({'error': '缺少单词数据'}), 400
+    
+    words_data = data['words']
+    save_words_to_excel()
+    return jsonify({'message': '保存成功'})
+
 # 添加文章API路由
 @app.route('/api/articles', methods=['GET'])
 def get_articles():
@@ -349,6 +479,78 @@ def add_article():
     save_article_to_excel()
     
     return jsonify(new_article), 201
+
+def save_words_to_excel():
+    """保存单词数据到Excel文件"""
+    global words_data
+    
+    try:
+        if os.path.exists(EXCEL_FILE):
+            # 读取现有Excel文件
+            df = pd.read_excel(EXCEL_FILE)
+            df.columns = [str(col).strip() for col in df.columns]
+            
+            # 准备要写入的数据
+            data_list = []
+            for word in words_data:
+                data_list.append({
+                    'id': word.get('id', ''),
+                    'Grade': word.get('grade', ''),
+                    'unit': word.get('unit', ''),
+                    '英文English': word.get('word', ''),
+                    '音标': word.get('phonetic', ''),
+                    '词性': word.get('pos', ''),
+                    '中文释义': word.get('meaning', ''),
+                    '例句': word.get('example', ''),
+                    '联想词': word.get('related', ''),
+                    'kill': word.get('kill', False),
+                    'check': word.get('check', 0)
+                })
+            
+            # 创建新的DataFrame
+            new_df = pd.DataFrame(data_list)
+            
+            # 保存到Excel文件，保持原有格式
+            with pd.ExcelWriter(EXCEL_FILE, engine='openpyxl') as writer:
+                new_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                
+                # 获取工作表并设置格式
+                worksheet = writer.sheets['Sheet1']
+                
+                # 设置列宽
+                for column in worksheet.columns:
+                    column_letter = column[0].column_letter
+                    max_length = 0
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+                # 设置所有行高为40
+                for row in range(2, worksheet.max_row + 1):
+                    worksheet.row_dimensions[row].height = 40
+                
+                # 设置单元格自动换行、顶对齐、左对齐
+                for row in worksheet.iter_rows(min_row=2):
+                    for cell in row:
+                        cell.alignment = openpyxl.styles.Alignment(
+                            wrap_text=True,
+                            vertical='top',
+                            horizontal='left'
+                        )
+            
+            print(f"✅ 成功保存 {len(words_data)} 个单词到Excel")
+        else:
+            print(f"⚠️ Excel文件不存在: {EXCEL_FILE}")
+    except Exception as e:
+        print(f"❌ 保存单词到Excel失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def save_article_to_excel():
     """保存文章数据到Excel文件"""
