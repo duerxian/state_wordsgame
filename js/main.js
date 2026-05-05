@@ -209,20 +209,25 @@ function handleDrop(e) {
 }
 
 function handleTouchStart(e) {
+    if (e.target.closest('.check-box')) {
+        return; // 如果点击的是复选框，不处理拖动
+    }
     e.preventDefault();
     const touch = e.touches[0];
     touchStartX = touch.clientX;
     touchStartY = touch.clientY;
+    touchMoveX = touch.clientX;
     isTouchDragging = false;
     draggedWord = {
         id: parseInt(this.dataset.id),
         element: this
     };
-    this.style.opacity = '0.5';
-    this.style.transition = 'transform 0.1s ease-out';
+    this.style.opacity = '0.7';
+    this.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
 }
 
 function handleTouchMove(e) {
+    if (!draggedWord) return;
     e.preventDefault();
     const touch = e.touches[0];
     touchMoveX = touch.clientX;
@@ -230,7 +235,7 @@ function handleTouchMove(e) {
     if (!isTouchDragging) {
         const deltaX = Math.abs(touch.clientX - touchStartX);
         const deltaY = Math.abs(touch.clientY - touchStartY);
-        if (deltaX > 10 || deltaY > 10) {
+        if (deltaX > 15 || deltaY > 15) {
             isTouchDragging = true;
         }
     }
@@ -240,10 +245,12 @@ function handleTouchMove(e) {
         const translateY = touch.clientY - touchStartY;
         draggedWord.element.style.transform = `translate(${translateX}px, ${translateY}px)`;
         draggedWord.element.style.zIndex = '1000';
+        draggedWord.element.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
     }
 }
 
 function handleTouchEnd(e) {
+    if (!draggedWord) return;
     e.preventDefault();
     
     if (isTouchDragging) {
@@ -257,6 +264,7 @@ function handleTouchEnd(e) {
         draggedWord.element.style.opacity = '1';
         draggedWord.element.style.transform = '';
         draggedWord.element.style.zIndex = '';
+        draggedWord.element.style.boxShadow = '';
     }
     
     if (isTouchDragging && draggedWord) {
@@ -716,6 +724,7 @@ async function loadLocalExcel() {
         applyFilters();
         updateStats();
         initDragAndDrop();
+        saveToLocalStorage(); // 保存Excel数据到本地存储
         console.log('✅ 本地Excel文件加载成功！');
         
     } catch (error) {
@@ -738,16 +747,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('📂 主页已加载');
     
-    // 优先从本地Excel文件加载数据，而不是从localStorage加载
-    loadLocalExcel().then(() => {
-        // 如果Excel加载失败，尝试从localStorage加载
-        if (words.length === 0) {
-            if (!loadFromLocalStorage()) {
-                // 如果localStorage也没有数据，使用默认数据
+    // 检测环境：本地优先加载Excel，GitHub Pages加载JSON
+    const isGitHubPages = window.location.hostname.includes('github.io');
+    
+    if (isGitHubPages) {
+        console.log('🚀 检测到GitHub Pages环境，加载words.json');
+        loadWords();
+    } else {
+        console.log('💻 检测到本地环境，优先加载Excel文件');
+        loadLocalExcel().then(() => {
+            if (words.length === 0) {
+                console.log('📄 Excel加载失败，回退到words.json');
                 loadWords();
             }
-        }
-    });
+        }).catch(() => {
+            console.log('📄 Excel加载异常，回退到words.json');
+            loadWords();
+        });
+    }
 });
 
 if (typeof words === 'undefined' || words.length === 0) {
