@@ -1,120 +1,286 @@
-// 句子练习页面逻辑
-const API_BASE_URL = '/api/articles';
-const WORDS_API_URL = '/api/words';
 let articles = [];
-let filteredArticles = [];
-let currentSelectedArticle = null; // 保存当前选中的文章
+let currentSelectedArticle = null;
 let words = []; // 存储单词数据用于翻译查询
-// ⭐ 删除 wordTranslationMap，改为基于当前文章的动态查找
 
-// 翻译配置 - 从localStorage加载或使用默认值
-let translationConfig = {
-    provider: 'baidu', // 'baidu' 或 'youdao'
-    baidu: {
-        appid: '',
-        key: ''
-    },
-    youdao: {
-        appkey: '',
-        key: ''
-    }
-};
-
-// 从localStorage或后端API加载翻译配置
-async function loadTranslationConfig() {
-    // 首先尝试从localStorage加载
-    const saved = localStorage.getItem('translationConfig');
-    if (saved) {
-        try {
-            translationConfig = JSON.parse(saved);
-            console.log('✅ 已从localStorage加载翻译配置:', translationConfig.provider);
-            return;
-        } catch (e) {
-            console.error('加载localStorage配置失败:', e);
-        }
-    }
-    
-    // 如果localStorage没有，从后端API自动获取
+// 加载本地Excel文件
+async function loadLocalExcel() {
     try {
-        const response = await fetch('/api/translation-config');
-        const data = await response.json();
+        console.log('📂 开始加载本地Excel文件: 英文文章表.xlsx');
         
-        if (data.success && data.config) {
-            // ⭐ 始终加载所有可用的翻译配置（不管当前 provider 是什么）
-            
-            // 配置百度通用翻译
-            if (data.config.baidu.configured) {
-                translationConfig.baidu.appid = data.config.baidu.appid;
-                translationConfig.baidu.key = data.config.baidu.key;
-                console.log('✅ 已加载百度通用翻译配置');
-                
-                // 如果之前没有设置 provider，默认使用百度
-                if (!translationConfig.provider || translationConfig.provider === 'baidu') {
-                    translationConfig.provider = 'baidu';
-                }
-            }
-            
-            // 配置百度大模型翻译
-            if (data.config.baidu_large.configured) {
-                translationConfig.baidu_large = {
-                    appid: data.config.baidu_large.appid,
-                    key: data.config.baidu_large.key
-                };
-                console.log('✅ 已加载百度大模型翻译配置');
-            }
-            
-            // ⭐ 配置有道翻译（无论百度是否配置，都要加载）
-            if (data.config.youdao.configured) {
-                translationConfig.youdao.appkey = data.config.youdao.appkey;
-                translationConfig.youdao.key = data.config.youdao.key;
-                console.log('✅ 已加载有道翻译配置');
-                
-                // 只有在百度未配置时，才将有道设为默认 provider
-                if (!data.config.baidu.configured && !translationConfig.provider) {
-                    translationConfig.provider = 'youdao';
-                    console.log('✅ 设置有道为默认翻译服务');
-                }
-            }
-            
-            // 保存到localStorage，下次直接使用
-            localStorage.setItem('translationConfig', JSON.stringify(translationConfig));
-            console.log('✅ 翻译配置已保存到localStorage');
-            console.log('📋 当前可用翻译服务:', {
-                baidu: data.config.baidu.configured,
-                baidu_large: data.config.baidu_large?.configured || false,
-                youdao: data.config.youdao.configured,
-                current_provider: translationConfig.provider
-            });
-        } else {
-            console.warn('⚠️ 未找到翻译API配置，请前往 config.html 页面配置');
+        // 使用fetch获取本地Excel文件
+        const response = await fetch('英文文章表.xlsx');
+        const data = await response.arrayBuffer();
+        
+        // 解析Excel文件
+        const workbook = XLSX.read(new Uint8Array(data), {type: 'array'});
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        console.log('📊 Excel解析结果:', jsonData);
+        console.log('📊 第一条数据:', jsonData[0]);
+        
+        if (jsonData.length === 0) {
+            console.log('⚠️ Excel文件中没有数据，使用默认数据');
+            return;
         }
+        
+        // 转换为文章格式
+        articles = jsonData.map((article, index) => {
+            // 智能查找列名 - 不区分大小写，包含关键词即可
+            const getValue = (keywords) => {
+                for (const key in article) {
+                    const keyLower = key.toLowerCase();
+                    for (const keyword of keywords) {
+                        if (keyLower.includes(keyword.toLowerCase())) {
+                            return article[key];
+                        }
+                    }
+                }
+                return '';
+            };
+            
+            // 尝试获取标题
+            let titleValue = getValue(['title', '标题', 'name', '名称']);
+            
+            // 尝试获取英文内容
+            let englishValue = getValue(['english', '英文', 'content', '内容']);
+            
+            // 尝试获取中文释义
+            let meaningValue = getValue(['meaning', '释义', '中文', '翻译']);
+            
+            // 尝试获取其他字段
+            const gradeValue = getValue(['grade', '年级']);
+            const unitValue = getValue(['unit', '单元']);
+            const translateWordValue = getValue(['translate-word', '翻译', 'translate']);
+            
+            // 获取kill状态
+            let killValue = false;
+            for (const key in article) {
+                if (key.toLowerCase().includes('kill') || key.includes('已斩')) {
+                    const val = article[key];
+                    killValue = val === true || val === 'true' || val === 1 || val === '已斩' || val === '已斩杀';
+                    break;
+                }
+            }
+            
+            // 获取check状态
+            let checkValue = 0;
+            for (const key in article) {
+                if (key.toLowerCase().includes('check') || key.includes('检查')) {
+                    const val = article[key];
+                    checkValue = val === true || val === 'true' || val === 1 ? 1 : 0;
+                    break;
+                }
+            }
+            
+            return {
+                id: index + 1,
+                title: titleValue || `文章${index + 1}`,
+                kill: killValue,
+                check: checkValue,
+                grade: gradeValue || '',
+                unit: unitValue || '',
+                english: englishValue || '',
+                meaning: meaningValue || '',
+                translate_word: translateWordValue || '',
+                content: englishValue || ''
+            };
+        }).filter(a => a.title);
+        
+        console.log('✅ 处理后的数据:', articles);
+        console.log('✅ 文章数量:', articles.length);
+        
+        if (articles.length === 0) {
+            console.log('⚠️ 没有找到有效的文章数据，使用默认数据');
+            return;
+        }
+        
+        // 更新页面
+        renderArticles();
+        console.log('✅ 本地Excel文件加载成功！');
+        
     } catch (error) {
-        console.warn('⚠️ 无法从后端获取翻译配置:', error.message);
+        console.error('❌ 加载本地Excel文件失败:', error);
+        // 如果加载失败，使用默认数据
+        console.log('⚠️ 加载本地Excel文件失败，使用默认数据');
+        loadArticles();
     }
 }
 
-// 初始化时加载配置
-loadTranslationConfig();
-
-// 初始化页面
-async function initPage() {
+async function loadArticles() {
     try {
-        // 同时加载文章和单词数据
-        const [articlesResponse, wordsResponse] = await Promise.all([
-            fetch(`${API_BASE_URL}`),
-            fetch(`${WORDS_API_URL}`)
-        ]);
-        
-        articles = await articlesResponse.json();
-        words = await wordsResponse.json();
-        
-        console.log('加载的文章数据:', articles);
-        console.log('加载的单词数据:', words.length, '个单词');
-        
-        applyFilters();
+        const response = await fetch('articles.json');
+        articles = await response.json();
+        renderArticles();
     } catch (error) {
-        console.error('初始化页面失败:', error);
+        console.error('加载文章失败:', error);
+        // 使用内置模拟数据
+        articles = [
+            {
+                "id": 1,
+                "title": "A myself(关于自己）",
+                "content": "Hello,\n  I am li Yuxiang.\n  I am a boy.\n  I'm nine years old.\n  I'm tall and strong.",
+                "english": "Hello, I am li Yuxiang. I am a boy. I'm nine years old. I'm tall and strong.",
+                "meaning": "你好，我是李雨翔。我是一个男孩。我九岁了。我又高又壮。"
+            },
+            {
+                "id": 2,
+                "title": "B hobbies（个人兴趣爱好）",
+                "content": "I like reading and writing.\n  I like painting too.\n  I like swimming.\n   I like playing basketball and online-games.",
+                "english": "I like reading and writing. I like painting too. I like swimming. I like playing basketball and online-games.",
+                "meaning": "我喜欢阅读和写作。我也喜欢绘画。我喜欢游泳。我喜欢打篮球和网络游戏。"
+            },
+            {
+                "id": 3,
+                "title": "C family（家庭背景）",
+                "content": "I have a happy family.\n  My father is a superman.\n  he can do everything.\n  My mother is a nurse.\n  she works in a hospital.\n  I don't have brothers and sisters.\n  I have three fish.\n  they are my pets.\n  and they are my best friend.",
+                "english": "I have a happy family. My father is a superman. He can do everything. My mother is a nurse. She works in a hospital. I don't have brothers and sisters. I have three fish. They are my pets and they are my best friend.",
+                "meaning": "我有一个幸福的家庭。我的爸爸是一个超人。他能做所有事情。我的妈妈是一名护士。她在医院工作。我没有兄弟姐妹。我有三条鱼。它们是我的宠物，也是我最好的朋友。"
+            },
+            {
+                "id": 4,
+                "title": "D your school life （你的学校生活）",
+                "content": "I like my school\n  my school is beautiful\n  There are teachers and students\n  I have a lot of friends, \n  I am so happy at here",
+                "english": "I like my school. My school is beautiful. There are teachers and students. I have a lot of friends. I am so happy here.",
+                "meaning": "我喜欢我的学校。我的学校很漂亮。有老师和学生。我有很多朋友。我在这里很开心。"
+            },
+            {
+                "id": 5,
+                "title": "E my dream（我的梦想）",
+                "content": "I have a dream.\n  I want to be a painter （teacher scientist sporter doctor fireman ）",
+                "english": "I have a dream. I want to be a painter (teacher scientist sportsman doctor fireman).",
+                "meaning": "我有一个梦想。我想成为一名画家（教师、科学家、运动员、医生、消防员）。"
+            },
+            {
+                "id": 6,
+                "title": "F Ending （结语）",
+                "content": "That's all.\n  Thank you!",
+                "english": "That's all. Thank you!",
+                "meaning": "就这些了。谢谢！"
+            }
+        ];
+        renderArticles();
     }
+}
+
+function renderArticles() {
+    const container = document.getElementById('normalWordContainer');
+    container.innerHTML = '';
+    
+    if (articles.length === 0) {
+        container.innerHTML = '<div class="no-data">没有文章</div>';
+        return;
+    }
+    
+    articles.forEach(article => {
+        const articleCard = document.createElement('div');
+        articleCard.className = 'word-card full-width';
+        articleCard.dataset.id = article.id;
+        
+        const displayText = article.title || '';
+        
+        articleCard.innerHTML = `
+            <span class="word-text">${displayText}</span>
+        `;
+        
+        articleCard.addEventListener('click', () => {
+            showArticleContent(article);
+        });
+        
+        container.appendChild(articleCard);
+    });
+}
+
+function showArticleContent(article) {
+    currentSelectedArticle = article;
+    const contentContainer = document.getElementById('killWordContainer');
+    
+    let contentHtml = `<div class="article-content"><h3>${article.title || ''}</h3>`;
+    
+    if (article.english) {
+        const clickableText = makeWordsClickable(article.english);
+        contentHtml += `<div class="english-content">${clickableText}</div>`;
+    }
+    
+    if (article.meaning) {
+        // 将文本按换行符分割成句子
+        const sentences = article.meaning.split(/\n+/);
+        // 为每个句子创建<p>标签
+        const meaningWithBreaks = sentences.map(sentence => {
+            if (!sentence.trim()) return '';
+            return `<p>${sentence}</p>`;
+        }).join('');
+        contentHtml += `<div class="chinese-content">${meaningWithBreaks}</div>`;
+    }
+    
+    if (!article.english && !article.meaning && article.content) {
+        // 将文本按换行符分割成句子
+        const sentences = article.content.split(/\n+/);
+        // 为每个句子创建<p>标签
+        const contentWithBreaks = sentences.map(sentence => {
+            if (!sentence.trim()) return '';
+            return `<p>${sentence}</p>`;
+        }).join('');
+        contentHtml += `<div class="content">${contentWithBreaks}</div>`;
+    }
+    
+    contentHtml += `</div>`;
+    contentContainer.innerHTML = contentHtml;
+    
+    attachWordClickEvents();
+}
+
+function makeWordsClickable(text) {
+    if (!text) return '';
+    // 将文本按换行符分割成句子
+    const sentences = text.split(/\n+/);
+    let wordIndex = 0;
+    // 为每个句子创建<p>标签，并为每个单词添加可点击事件
+    return sentences.map(sentence => {
+        if (!sentence.trim()) return '';
+        const clickableText = sentence.replace(/([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g, (match) => {
+            const html = `<span class="clickable-word" data-word="${match}" data-index="${wordIndex}">${match}</span>`;
+            wordIndex++;
+            return html;
+        });
+        return `<p>${clickableText}</p>`;
+    }).join('');
+}
+
+function attachWordClickEvents() {
+    const clickableWords = document.querySelectorAll('.clickable-word');
+    clickableWords.forEach(word => {
+        word.addEventListener('click', handleWordClick);
+    });
+}
+
+// 本地翻译 - 优先使用当前文章的 translate-word 列数据
+function getLocalTranslation(word, wordIndex = -1) {
+    if (!word) return '缺少释义';
+    
+    const lowerWord = word.toLowerCase();
+    
+    // ⭐ 第一优先级：如果有位置索引且当前有选中的文章，从文章中查找
+    if (wordIndex >= 0 && currentSelectedArticle) {
+        const articleTranslation = getTranslationFromCurrentArticle(word, wordIndex);
+        if (articleTranslation) {
+            return articleTranslation;
+        }
+    }
+    
+    // ⭐ 第二优先级：从单词表（words数组）中查找
+    if (typeof words !== 'undefined' && words.length > 0) {
+        const localWord = words.find(w => w.word.toLowerCase() === lowerWord);
+        if (localWord && localWord.meaning) {
+            console.log(`✅ 本地翻译（单词表）: ${word} -> ${localWord.meaning}`);
+            return localWord.meaning;
+        }
+    }
+    
+    // ⭐ 第三优先级：返回提示
+    console.log(`⚠️ 本地无翻译: ${word}`);
+    return '缺少释义';
 }
 
 // ⭐ 从当前文章的 translate-word 列中查找单词的翻译（基于位置对应）
@@ -218,7 +384,9 @@ function findAllWordTranslationsInArticle(word) {
         wordsInLine.forEach(word => {
             allWords.push({
                 word: word,
-                globalIndex: globalIndex
+                globalIndex: globalIndex,
+                lineIndex: lineIdx,
+                indexInLine: allWords.filter(w => w.lineIndex === lineIdx).length
             });
             globalIndex++;
         });
@@ -236,388 +404,62 @@ function findAllWordTranslationsInArticle(word) {
         
         translationsInLine.forEach(trans => {
             allTranslations.push({
-                translation: trans
+                translation: trans,
+                lineIndex: lineIdx
             });
         });
     });
     
-    const results = [];
-    const targetWord = word.toLowerCase();
+    const lowerWord = word.toLowerCase();
+    const matches = [];
     
-    // 查找所有匹配的单词位置
-    for (let i = 0; i < allWords.length; i++) {
-        if (allWords[i].word.toLowerCase() === targetWord && i < allTranslations.length) {
-            results.push({
-                index: i,
-                translation: allTranslations[i].translation
+    allWords.forEach((wordObj, index) => {
+        if (wordObj.word.toLowerCase() === lowerWord && index < allTranslations.length) {
+            matches.push({
+                index: wordObj.globalIndex,
+                lineIndex: wordObj.lineIndex,
+                indexInLine: wordObj.indexInLine,
+                translation: allTranslations[index].translation
             });
         }
-    }
+    });
     
-    return results;
+    return matches;
 }
 
-// 筛选文章
-function filterArticles() {
-    const gradeFilter = document.getElementById('gradeFilter')?.value || '';
-    const unitFilter = document.getElementById('unitFilter')?.value || '';
-    const languageFilter = document.getElementById('languageFilter')?.value || '';
-    const killFilter = document.getElementById('killFilter')?.value || '';
-    const checkFilter = document.getElementById('checkFilter')?.value || '';
-    const sortFilter = document.getElementById('sortFilter')?.value || 'id';
-    const searchText = (document.getElementById('searchInput')?.value || '').toLowerCase();
+// 显示单词翻译 - 在单词正下方显示
+function showWordTranslation(wordElement, translation) {
+    // 检查是否已经存在翻译元素
+    let translationDiv = wordElement.querySelector('.word-translation');
     
-    let filtered = [...articles];
-    
-    // 按年级筛选 - 对应Excel的Grade列
-    if (gradeFilter) {
-        filtered = filtered.filter(article => {
-            const articleGrade = article.grade || '';
-            return articleGrade === gradeFilter;
-        });
-    }
-    
-    // 按单元筛选 - 对应Excel的unit列
-    if (unitFilter) {
-        filtered = filtered.filter(article => {
-            const articleUnit = String(article.unit || '');
-            return articleUnit === unitFilter;
-        });
-    }
-    
-    // 按语言筛选 - English列和Chinese列
-    if (languageFilter === 'english') {
-        // 只显示有英文内容的文章
-        filtered = filtered.filter(article => article.english && article.english.trim() !== '');
-    } else if (languageFilter === 'meaning') {
-        // 只显示有中文内容的文章
-        filtered = filtered.filter(article => article.meaning && article.meaning.trim() !== '');
-    }
-    
-    // 按kill筛选 - 对应Excel的kill列
-    if (killFilter === 'kill') {
-        filtered = filtered.filter(article => article.kill === true || article.kill === 1);
-    } else if (killFilter === 'no-kill') {
-        filtered = filtered.filter(article => article.kill === false || article.kill === 0 || !article.kill);
-    }
-    
-    // 按check筛选 - 对应Excel的check列
-    if (checkFilter === 'checked') {
-        filtered = filtered.filter(article => article.check === 1 || article.check === true);
-    } else if (checkFilter === 'unchecked') {
-        filtered = filtered.filter(article => article.check === 0 || article.check === false || !article.check);
-    }
-    
-    // 搜索筛选
-    if (searchText) {
-        filtered = filtered.filter(article => 
-            (article.title && article.title.toLowerCase().includes(searchText)) ||
-            (article.english && article.english.toLowerCase().includes(searchText)) ||
-            (article.meaning && article.meaning.toLowerCase().includes(searchText))
-        );
-    }
-    
-    // 排序
-    if (sortFilter === 'random') {
-        filtered = filtered.sort(() => Math.random() - 0.5);
-    } else if (sortFilter === 'az') {
-        filtered = filtered.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    if (!translationDiv) {
+        // 创建翻译显示元素
+        translationDiv = document.createElement('div');
+        translationDiv.className = 'word-translation';
+        translationDiv.textContent = translation;
+        
+        // 作为子元素添加到单词内部，确保在单词正下方
+        wordElement.appendChild(translationDiv);
     } else {
-        filtered = filtered.sort((a, b) => a.id - b.id);
-    }
-    
-    return filtered;
-}
-
-// 应用筛选条件
-function applyFilters() {
-    filteredArticles = filterArticles();
-    renderArticles(filteredArticles);
-    
-    // 如果有选中的文章，根据新的语言筛选重新渲染内容
-    if (currentSelectedArticle) {
-        renderArticleContent(currentSelectedArticle);
-    }
-    
-    // 测试翻译API连接
-    testTranslationAPI();
-}
-
-// 测试翻译API连接
-async function testTranslationAPI() {
-    const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
-    const testWord = 'test';
-    
-    console.log(`🧪 测试${transFilter}翻译API连接...`);
-    
-    try {
-        // ⭐ 传入 transFilter 参数
-        const config = getCurrentTranslationConfig(transFilter);
-        if (!config.valid) {
-            console.error(`❌ 翻译配置无效: ${config.message}`);
-            return;
-        }
-        
-        let translation;
-        if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
-            translation = await translateWithBaidu(testWord, config.appid, config.key, transFilter === 'baidu-large' ? 'large' : 'general');
-        } else if (transFilter === 'youdao') {
-            translation = await translateWithYoudao(testWord, config.appkey, config.key);
-        } else if (transFilter === 'local') {
-            translation = getLocalTranslation(testWord);
-            console.log(`✅ 本地翻译测试成功: "${testWord}" → "${translation}"`);
-            return;
-        }
-        
-        if (translation) {
-            console.log(`✅ ${transFilter}翻译API连接成功: "${testWord}" → "${translation}"`);
-        } else {
-            console.error(`❌ ${transFilter}翻译API测试失败: 无翻译结果`);
-        }
-    } catch (error) {
-        console.error(`❌ ${transFilter}翻译API测试失败: ${error.message}`);
+        // 如果已存在，更新内容
+        translationDiv.textContent = translation;
     }
 }
 
-// 测试所有翻译 API
-async function testAllTranslationAPIs() {
-    console.log('🧪 开始测试所有翻译 API...');
-    
-    try {
-        const response = await fetch('/api/test-translation');
-        const data = await response.json();
-        
-        if (!data.success) {
-            console.error('❌ 测试失败:', data.error);
-            alert('测试失败: ' + data.error);
-            return;
-        }
-        
-        console.log('📊 测试结果:', data);
-        
-        let message = '翻译 API 测试结果:\n\n';
-        const results = data.results;
-        
-        // 百度通用翻译
-        if (results.baidu_general) {
-            message += '【百度通用翻译】\n';
-            if (results.baidu_general.status === 'success') {
-                message += `✅ 成功 - "${data.test_word}" → "${results.baidu_general.translation}"\n`;
-            } else if (results.baidu_general.status === 'error') {
-                message += `❌ 失败 - 错误码: ${results.baidu_general.error_code}\n`;
-                message += `   错误信息: ${results.baidu_general.error_msg}\n`;
-            } else if (results.baidu_general.status === 'not_configured') {
-                message += `⚠️ 未配置\n`;
-            } else {
-                message += `❌ 异常: ${results.baidu_general.error}\n`;
-            }
-            message += '\n';
-        }
-        
-        // 百度大模型翻译
-        if (results.baidu_large) {
-            message += '【百度大模型翻译】\n';
-            if (results.baidu_large.status === 'success') {
-                message += `✅ 成功 - "${data.test_word}" → "${results.baidu_large.translation}"\n`;
-            } else if (results.baidu_large.status === 'error') {
-                message += `❌ 失败 - 错误码: ${results.baidu_large.error_code}\n`;
-                message += `   错误信息: ${results.baidu_large.error_msg}\n`;
-                
-                // 提供解决方案
-                if (results.baidu_large.error_code === '517') {
-                    message += `\n💡 提示: 该密钥可能未开通"大模型翻译"服务\n`;
-                    message += `   请前往百度翻译开放平台开通服务\n`;
-                    message += `   网址: https://fanyi-api.baidu.com/api/trans/product/apipro\n`;
-                }
-            } else if (results.baidu_large.status === 'not_configured') {
-                message += `⚠️ 未配置\n`;
-            } else {
-                message += `❌ 异常: ${results.baidu_large.error}\n`;
-            }
-            message += '\n';
-        }
-        
-        // 有道翻译
-        if (results.youdao) {
-            message += '【有道翻译】\n';
-            if (results.youdao.status === 'success') {
-                message += `✅ 成功 - "${data.test_word}" → "${results.youdao.translation}"\n`;
-            } else if (results.youdao.status === 'error') {
-                message += `❌ 失败 - 错误码: ${results.youdao.error_code}\n`;
-            } else if (results.youdao.status === 'not_configured') {
-                message += `⚠️ 未配置\n`;
-            } else {
-                message += `❌ 异常: ${results.youdao.error}\n`;
-            }
-            message += '\n';
-        }
-        
-        console.log(message);
-        alert(message);
-        
-    } catch (error) {
-        console.error('❌ 测试异常:', error);
-        alert('测试异常: ' + error.message);
+// 隐藏单词翻译
+function hideWordTranslation(wordElement) {
+    const translationDiv = wordElement.querySelector('.word-translation');
+    if (translationDiv) {
+        translationDiv.remove();
     }
-}
-
-// ⭐ 删除 showLocalTranslationStats，因为不再维护全局映射表
-
-// 渲染文章列表
-function renderArticles(articles) {
-    const container = document.getElementById('normalWordContainer');
-    container.innerHTML = '';
-    
-    if (articles.length === 0) {
-        container.innerHTML = '<div class="no-data">没有符合条件的文章</div>';
-        return;
-    }
-    
-    articles.forEach(article => {
-        const articleCard = document.createElement('div');
-        articleCard.className = `word-card full-width ${article.check ? 'checked' : ''}`;
-        articleCard.dataset.id = article.id;
-        
-        // 文章列表始终显示英文标题，不受语言筛选影响
-        const displayText = article.title || '';
-        
-        articleCard.innerHTML = `
-            <span class="word-text">${displayText}</span>
-            <input type="checkbox" class="check-box" onchange="toggleKill(${article.id})" ${article.kill ? 'checked' : ''}>
-            <input type="checkbox" class="check-box" onchange="toggleCheckStatus(${article.id})" ${article.check ? 'checked' : ''}>
-            <div class="edit-btn" onclick="editArticle(${article.id})" title="编辑文章">✏️</div>
-        `;
-        
-        // 点击文章显示内容
-        articleCard.addEventListener('click', (e) => {
-            if (!e.target.closest('.check-box') && !e.target.closest('.edit-btn')) {
-                showArticleContent(article);
-            }
-        });
-        
-        container.appendChild(articleCard);
-    });
-}
-
-// 显示文章内容 - 根据语言筛选决定显示英文还是中文
-function showArticleContent(article) {
-    currentSelectedArticle = article; // 保存当前选中的文章
-    renderArticleContent(article);
-}
-
-// 渲染文章内容 - 根据语言筛选显示
-function renderArticleContent(article) {
-    if (!article) return;
-    
-    const contentContainer = document.getElementById('killWordContainer');
-    const languageFilter = document.getElementById('languageFilter')?.value || '';
-    
-    let contentHtml = `<div class="article-content"><h3>${article.title || ''}</h3>`;
-    
-    // 根据语言筛选决定显示内容
-    if (languageFilter === 'english') {
-        // 只显示英文内容（Excel的English列），并将单词包装成可点击元素
-        if (article.english) {
-            const clickableText = makeWordsClickableWithIndex(article.english);
-            contentHtml += `<div class="english-content">${clickableText}</div>`;
-        } else {
-            contentHtml += `<div class="no-data">暂无英文内容</div>`;
-        }
-    } else if (languageFilter === 'meaning') {
-        // 只显示中文内容（Excel的Chinese列）
-        if (article.meaning) {
-            const sentences = splitIntoSentences(article.meaning);
-            const sentenceLines = sentences.map(sentence => {
-                return `<div class="sentence-line">${sentence}</div>`;
-            }).join('');
-            contentHtml += `<div class="chinese-content">${sentenceLines}</div>`;
-        } else {
-            contentHtml += `<div class="no-data">暂无中文内容</div>`;
-        }
-    } else {
-        // 无筛选时，同时显示英文和中文
-        if (article.english) {
-            const clickableText = makeWordsClickableWithIndex(article.english);
-            contentHtml += `<div class="english-content">${clickableText}</div>`;
-        }
-        if (article.meaning) {
-            const sentences = splitIntoSentences(article.meaning);
-            const sentenceLines = sentences.map(sentence => {
-                return `<div class="sentence-line">${sentence}</div>`;
-            }).join('');
-            contentHtml += `<div class="chinese-content">${sentenceLines}</div>`;
-        }
-        if (!article.english && !article.meaning) {
-            contentHtml += `<div class="no-data">暂无内容</div>`;
-        }
-    }
-    
-    contentHtml += `</div>`;
-    contentContainer.innerHTML = contentHtml;
-    
-    // 为所有可点击的单词添加事件监听
-    attachWordClickEvents();
-}
-
-// 将文本按句子分割（只按换行符分割，不按标点分割）
-function splitIntoSentences(text) {
-    if (!text) return [];
-    
-    // 只按换行符分割，保留每一行的完整内容
-    const lines = text.split(/\n/);
-    const sentences = [];
-    
-    lines.forEach(line => {
-        line = line.trim();
-        if (line) {
-            sentences.push(line);
-        }
-    });
-    
-    return sentences;
-}
-
-// 将英文文本中的单词包装成可点击的元素，并添加全局位置索引
-function makeWordsClickableWithIndex(text) {
-    if (!text) return '';
-    
-    // 按换行符分割成多行
-    const lines = text.split(/\n/);
-    let globalWordIndex = 0; // 全局单词索引
-    
-    const processedLines = lines.map(line => {
-        line = line.trim();
-        if (!line) return '';
-        
-        // 使用正则表达式匹配单词，并为每个单词添加 data-index 属性
-        let wordIndexInLine = 0;
-        const processedLine = line.replace(/([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g, (match) => {
-            const span = `<span class="clickable-word" data-word="${match}" data-index="${globalWordIndex}">${match}</span>`;
-            globalWordIndex++;
-            wordIndexInLine++;
-            return span;
-        });
-        
-        return `<div class="sentence-line">${processedLine}</div>`;
-    });
-    
-    return processedLines.join('');
-}
-
-// 为所有可点击的单词添加事件监听
-function attachWordClickEvents() {
-    const clickableWords = document.querySelectorAll('.clickable-word');
-    clickableWords.forEach(word => {
-        word.addEventListener('click', handleWordClick);
-    });
 }
 
 // 处理单词点击事件 - 支持切换显示/隐藏，各单词状态独立
-async function handleWordClick(e) {
+function handleWordClick(e) {
     e.stopPropagation();
     const wordElement = e.target;
     const word = wordElement.dataset.word;
-    const wordIndex = parseInt(wordElement.dataset.index); // ⭐ 获取单词的位置索引
+    const wordIndex = parseInt(wordElement.dataset.index); // 获取单词的位置索引
     
     if (!word) return;
     
@@ -644,49 +486,23 @@ async function handleWordClick(e) {
     wordElement.classList.add('word-active');
     
     // 获取翻译并显示
-    let translation;
-    if (e.ctrlKey) {
-            // CTRL+左键直接调用翻译API并覆盖缓存
-            const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
-            const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
-            console.log(`🔄 强制调用${apiName}: ${word}`);
-            translation = await translateWithAPI(word, transFilter);
-            if (translation) {
-                // 更新本地单词数据
-                const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
-                if (localWord) {
-                    localWord.meaning = translation;
-                    console.log(`✅ 已更新缓存: "${word}" → "${translation}"`);
-                } else {
-                    words.push({ word: word, meaning: translation });
-                    console.log(`✅ 已添加到缓存: "${word}" → "${translation}"`);
-                }
-            } else {
-                translation = '暂无翻译';
-            }
-        } else {
-            // 正常流程，优先本地缓存
-            translation = await getWordTranslation(word, wordIndex); // ⭐ 传入位置索引
-        }
+    const translation = getLocalTranslation(word, wordIndex); // 传入位置索引
     showWordTranslation(wordElement, translation);
 }
 
-// 使用Web Speech API播放单词发音 - 优化版本
 function speakWord(word) {
     if (!word) return;
     
     console.log("🚀 播放单词：", word);
     
-    // 先清空之前的语音
     window.speechSynthesis.cancel();
     
     const msg = new SpeechSynthesisUtterance();
     msg.text = word;
-    msg.lang = 'zh-CN'; // 设置为美式英语
-    msg.rate = 0.6; // 语速稍慢，便于学习
+    msg.lang = 'zh-CN';
+    msg.rate = 0.8;
     msg.pitch = 1;
 
-    // 核心：Chrome 必须等语音加载完成
     function speak() {
         window.speechSynthesis.speak(msg);
         console.log("✅ 正在播放……");
@@ -696,482 +512,23 @@ function speakWord(word) {
     if (voices.length) {
         speak();
     } else {
-        // 如果语音列表为空，等待加载
         window.speechSynthesis.onvoiceschanged = speak;
     }
 }
 
-// 获取单词翻译 - 智能降级策略
-async function getWordTranslation(word, wordIndex = -1) {
-    const transFilter = document.getElementById('transFilter')?.value || 'baidu-general';
-    
-    // ⭐ 第一优先级：从单词表（words数组）中查找
-    const localWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
-    if (localWord && localWord.meaning) {
-        console.log(`✅ 使用缓存翻译: "${word}" → "${localWord.meaning}"`);
-        return localWord.meaning;
-    }
-    
-    // ⭐ 第二优先级：尝试使用翻译API
+// 加载单词表数据
+async function loadWords() {
     try {
-        const apiTranslation = await translateWithAPI(word, transFilter);
-        if (apiTranslation) {
-            const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
-            console.log(`✅ 使用${apiName}: "${word}" → "${apiTranslation}"`);
-            
-            // 将API翻译结果保存到本地单词表，下次可以直接使用
-            const existingWord = words.find(w => w.word.toLowerCase() === word.toLowerCase());
-            if (existingWord) {
-                existingWord.meaning = apiTranslation;
-            } else {
-                words.push({ word: word, meaning: apiTranslation });
-            }
-            
-            return apiTranslation;
-        }
+        const response = await fetch('words.json');
+        words = await response.json();
+        console.log(`✅ 成功加载单词表，共 ${words.length} 个单词`);
     } catch (error) {
-        const apiName = transFilter === 'baidu-general' ? '百度通用翻译' : transFilter === 'baidu-large' ? '百度大模型翻译' : transFilter === 'youdao' ? '有道翻译' : '本地翻译';
-        console.warn(`⚠️ ${apiName}翻译失败: ${error.message}`);
-    }
-    
-    // ⭐ 第三优先级：返回友好提示
-    console.log(`⚠️ 无法获取翻译: ${word}`);
-    return '暂无翻译';
-}
-
-// 本地翻译 - 优先使用当前文章的 translate-word 列数据
-function getLocalTranslation(word, wordIndex = -1) {
-    if (!word) return '缺少释义';
-    
-    const lowerWord = word.toLowerCase();
-    
-    // ⭐ 第一优先级：如果有位置索引且当前有选中的文章，从文章中查找
-    if (wordIndex >= 0 && currentSelectedArticle) {
-        const articleTranslation = getTranslationFromCurrentArticle(word, wordIndex);
-        if (articleTranslation) {
-            return articleTranslation;
-        }
-    }
-    
-    // ⭐ 第二优先级：从单词表（words数组）中查找
-    const localWord = words.find(w => w.word.toLowerCase() === lowerWord);
-    if (localWord && localWord.meaning) {
-        console.log(`✅ 本地翻译（单词表）: ${word} -> ${localWord.meaning}`);
-        return localWord.meaning;
-    }
-    
-    // ⭐ 第三优先级：返回提示
-    console.log(`⚠️ 本地无翻译: ${word}`);
-    return '缺少释义';
-}
-
-// 使用翻译API翻译单词
-async function translateWithAPI(word, transFilter) {
-    // ⭐ 传入 transFilter 参数获取对应的配置
-    const config = getCurrentTranslationConfig(transFilter);
-    
-    if (!config.valid) {
-        throw new Error(config.message);
-    }
-    
-    // 根据筛选条件选择翻译服务
-    if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
-        return await translateWithBaidu(word, config.appid, config.key, transFilter === 'baidu-large' ? 'large' : 'general');
-    } else if (transFilter === 'youdao') {
-        return await translateWithYoudao(word, config.appkey, config.key);
-    } else {
-        // 默认使用百度通用翻译
-        return await translateWithBaidu(word, config.appid, config.key, 'general');
+        console.error('加载单词表失败:', error);
+        words = [];
     }
 }
 
-// 获取当前有效的翻译配置
-function getCurrentTranslationConfig(transFilter) {
-    // ⭐ 根据 transFilter 参数动态选择配置
-    
-    if (transFilter === 'baidu-general' || transFilter === 'baidu-large') {
-        // 百度翻译（通用或大模型）
-        if (!translationConfig.baidu.appid || !translationConfig.baidu.key) {
-            return { valid: false, message: '百度翻译未配置' };
-        }
-        return { 
-            valid: true, 
-            provider: 'baidu',
-            appid: translationConfig.baidu.appid,
-            key: translationConfig.baidu.key
-        };
-    } else if (transFilter === 'youdao') {
-        // 有道翻译
-        if (!translationConfig.youdao.appkey || !translationConfig.youdao.key) {
-            return { valid: false, message: '有道翻译未配置' };
-        }
-        return { 
-            valid: true, 
-            provider: 'youdao',
-            appkey: translationConfig.youdao.appkey,
-            key: translationConfig.youdao.key
-        };
-    } else {
-        // 默认使用当前 provider
-        if (translationConfig.provider === 'baidu') {
-            if (!translationConfig.baidu.appid || !translationConfig.baidu.key) {
-                return { valid: false, message: '百度翻译未配置' };
-            }
-            return { 
-                valid: true, 
-                provider: 'baidu',
-                appid: translationConfig.baidu.appid,
-                key: translationConfig.baidu.key
-            };
-        } else {
-            if (!translationConfig.youdao.appkey || !translationConfig.youdao.key) {
-                return { valid: false, message: '有道翻译未配置' };
-            }
-            return { 
-                valid: true, 
-                provider: 'youdao',
-                appkey: translationConfig.youdao.appkey,
-                key: translationConfig.youdao.key
-            };
-        }
-    }
-}
-
-// 百度翻译API（通过本地代理服务器）
-async function translateWithBaidu(text, appid, key, model = 'general') {
-    const proxyUrl = '/api/translate/baidu';
-    
-    try {
-        const response = await fetch(proxyUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                text: text,
-                appid: appid,
-                key: key,
-                model: model
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP错误: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success || !data.translation) {
-            throw new Error('翻译结果为空');
-        }
-        
-        return data.translation;
-        
-    } catch (error) {
-        console.error('百度翻译API调用失败:', error);
-        throw error;
-    }
-}
-
-// 有道翻译API（通过本地代理服务器）
-async function translateWithYoudao(text, appkey, key) {
-    const proxyUrl = '/api/translate/youdao';
-    
-    try {
-        const response = await fetch(proxyUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                text: text,
-                appkey: appkey,
-                key: key
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP错误: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (!data.success || !data.translation) {
-            throw new Error('翻译结果为空');
-        }
-        
-        return data.translation;
-        
-    } catch (error) {
-        console.error('有道翻译API调用失败:', error);
-        throw error;
-    }
-}
-
-// 显示单词翻译 - 在单词正下方显示
-function showWordTranslation(wordElement, translation) {
-    // ⭐ 不再隐藏其他翻译，每个单词的翻译独立显示
-    
-    // 检查是否已经存在翻译元素
-    let translationDiv = wordElement.querySelector('.word-translation');
-    
-    if (!translationDiv) {
-        // 创建翻译显示元素
-        translationDiv = document.createElement('div');
-        translationDiv.className = 'word-translation';
-        translationDiv.textContent = translation;
-        
-        // 作为子元素添加到单词内部，确保在单词正下方
-        wordElement.appendChild(translationDiv);
-    } else {
-        // 如果已存在，更新内容
-        translationDiv.textContent = translation;
-    }
-}
-
-// 隐藏单词翻译
-function hideWordTranslation(wordElement) {
-    const translationDiv = wordElement.querySelector('.word-translation');
-    if (translationDiv) {
-        translationDiv.remove();
-    }
-}
-
-// 搜索文章
-function searchSentences() {
-    applyFilters();
-}
-
-// 切换文章已斩状态 - 对应Excel的kill列
-function toggleKill(id) {
-    const article = articles.find(a => a.id === id);
-    if (article) {
-        article.kill = !article.kill;
-        // 更新卡片样式
-        const articleCard = document.querySelector(`[data-id="${id}"]`);
-        if (articleCard) {
-            if (article.kill) {
-                articleCard.classList.add('killed');
-            } else {
-                articleCard.classList.remove('killed');
-            }
-        }
-        // 保存到后端
-        fetch('/api/articles', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(article)
-        });
-    }
-}
-
-// 切换文章check状态 - 对应Excel的check列
-async function toggleCheckStatus(id) {
-    const article = articles.find(a => a.id === id);
-    if (article) {
-        article.check = article.check ? 0 : 1;
-        // 更新卡片样式
-        const articleCard = document.querySelector(`[data-id="${id}"]`);
-        if (articleCard) {
-            if (article.check) {
-                articleCard.classList.add('checked');
-            } else {
-                articleCard.classList.remove('checked');
-            }
-        }
-        try {
-            const response = await fetch(`${API_BASE_URL}/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ check: article.check })
-            });
-            if (!response.ok) {
-                console.error('更新check状态失败');
-                article.check = article.check ? 0 : 1; // 回滚
-                // 回滚卡片样式
-                if (articleCard) {
-                    if (article.check) {
-                        articleCard.classList.add('checked');
-                    } else {
-                        articleCard.classList.remove('checked');
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('网络错误:', error);
-            article.check = article.check ? 0 : 1; // 回滚
-            // 回滚卡片样式
-            if (articleCard) {
-                if (article.check) {
-                    articleCard.classList.add('checked');
-                } else {
-                    articleCard.classList.remove('checked');
-                }
-            }
-        }
-    }
-}
-
-// 编辑文章
-function editArticle(id) {
-    const article = articles.find(a => a.id === id);
-    if (article) {
-        // 填充表单
-        document.getElementById('wordInput').value = article.title || '';
-        document.getElementById('gradeInput').value = article.grade || '7上';
-        document.getElementById('unitInput').value = article.unit || '1';
-        document.getElementById('exampleInput').value = article.english || '';
-        document.getElementById('meaningInput').value = article.meaning || '';
-        
-        // 保存当前编辑ID
-        window.currentEditId = id;
-        
-        // 显示模态框
-        document.getElementById('modalTitle').textContent = '编辑文章';
-        document.getElementById('modal').style.display = 'block';
-    }
-}
-
-// 显示添加模态框
-function showAddModal() {
-    window.currentEditId = null;
-    // 清空表单
-    document.getElementById('wordInput').value = '';
-    document.getElementById('gradeInput').value = '7上';
-    document.getElementById('unitInput').value = '1';
-    document.getElementById('exampleInput').value = '';
-    document.getElementById('meaningInput').value = '';
-    
-    document.getElementById('modalTitle').textContent = '添加文章';
-    document.getElementById('modal').style.display = 'block';
-}
-
-// 关闭模态框
-function closeModal() {
-    document.getElementById('modal').style.display = 'none';
-    window.currentEditId = null;
-}
-
-// 保存文章
-async function saveWord() {
-    const title = document.getElementById('wordInput').value.trim();
-    const grade = document.getElementById('gradeInput').value;
-    const unit = document.getElementById('unitInput').value;
-    const english = document.getElementById('exampleInput').value.trim();
-    const meaning = document.getElementById('meaningInput').value.trim();
-    
-    if (!title) {
-        alert('请输入文章标题');
-        return;
-    }
-    
-    try {
-        if (window.currentEditId) {
-            // 更新现有文章
-            const response = await fetch(`${API_BASE_URL}/${window.currentEditId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    title: title,
-                    grade: grade,
-                    unit: unit,
-                    english: english,
-                    meaning: meaning
-                })
-            });
-            
-            if (response.ok) {
-                const updatedArticle = await response.json();
-                const index = articles.findIndex(a => a.id === window.currentEditId);
-                if (index !== -1) {
-                    articles[index] = updatedArticle;
-                }
-                alert('修改成功！');
-                closeModal();
-                applyFilters();
-            } else {
-                alert('修改失败，请重试');
-            }
-        } else {
-            // 添加新文章
-            const response = await fetch(API_BASE_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    title: title,
-                    grade: grade,
-                    unit: unit,
-                    english: english,
-                    meaning: meaning
-                })
-            });
-            
-            if (response.ok) {
-                const newArticle = await response.json();
-                articles.push(newArticle);
-                alert('添加成功！');
-                closeModal();
-                applyFilters();
-            } else {
-                alert('添加失败，请重试');
-            }
-        }
-    } catch (error) {
-        console.error('保存失败:', error);
-        alert('保存失败，请重试');
-    }
-}
-
-// 保存所有更改
-async function saveChanges() {
-    if (!confirm('确定要保存所有更改吗？这将更新Excel文件。')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/save-all`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ articles: articles })
-        });
-        
-        if (response.ok) {
-            alert('保存成功！所有更改已同步到Excel文件。');
-        } else {
-            alert('保存失败，请重试');
-        }
-    } catch (error) {
-        console.error('保存失败:', error);
-        alert('保存失败，请重试');
-    }
-}
-
-// 页面加载时初始化所有事件
 document.addEventListener('DOMContentLoaded', function() {
-    // 唤醒语音引擎 - 确保语音列表已加载
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.getVoices();
-        
-        // Chrome需要等待语音加载完成
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {
-            window.speechSynthesis.onvoiceschanged = () => {
-                console.log('✅ 语音引擎已就绪');
-            };
-        }
-    }
-    
-    console.log('📄 句子练习页面已加载');
+    loadLocalExcel();
+    loadWords(); // 同时加载单词表
 });
-
-// 页面加载完成后初始化
-window.addEventListener('DOMContentLoaded', initPage);

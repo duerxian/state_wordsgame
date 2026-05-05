@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>sentence</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -15,9 +16,7 @@
             <div class="tab-container">
                 <a href="index.html" class="tab">单词表</a>
                 <a href="wordgame.html" class="tab">单词连连看</a>
-                <a href="typing.html" class="tab">打字练习</a>
                 <a href="sentence.html" class="tab active">句子练习</a>
-                <a href="balloongame.html" class="tab">气球射击游戏</a>
             </div>
         </div>
         
@@ -25,10 +24,6 @@
         <div class="controls">
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="搜索文章..." onkeyup="searchSentences()">
-            </div>
-            <div class="action-buttons">
-                <button class="add-btn" onclick="showAddModal()">+ 添加文章</button>
-                <button class="save-btn" onclick="saveChanges()">💾 保存</button>
             </div>
         </div>
         
@@ -92,22 +87,7 @@
                     <option value="checked">checked</option>
                 </select>
             </div>
-            <div class="filter-group">
-                <label for="transFilter">翻译方式:</label>
-                <select id="transFilter" onchange="applyFilters()">
-                    <option value="baidu-general" selected>百度通用翻译</option>
-                    <option value="baidu-large">百度大模型翻译</option>
-                    <option value="youdao">有道翻译</option>
-                    <option value="local">本地翻译</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <button class="test-btn" onclick="testAllTranslationAPIs()" style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">🧪 测试所有翻译API</button>
-            </div>
-            <div class="filter-group">
-                <p>提示:</p>
-                <p>ctrl+左键强制调用翻译API</p>
-            </div>
+
         </div>
 
         <div class="word-container">
@@ -126,58 +106,7 @@
         </div>
     </div>
     
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2 id="modalTitle">添加文章</h2>
-            <div class="form-group">
-                <label for="wordInput">文章标题:</label>
-                <input type="text" id="wordInput" placeholder="输入文章标题">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="gradeInput">grade:</label>
-                    <select id="gradeInput">
-                        <option value="7上" selected>7上</option>
-                        <option value="7下">7下</option>
-                        <option value="8上">8上</option>
-                        <option value="8下">8下</option>
-                        <option value="9上">9上</option>
-                        <option value="9下">9下</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="unitInput">unit:</label>
-                    <select id="unitInput">
-                        <option value="1" selected>1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                    </select>
-                </div>
 
-            </div>
-
-            <div class="form-group">
-                <label for="exampleInput">英文</label>
-                <textarea id="exampleInput" placeholder="输入英文文章内容" rows="5"></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label for="meaningInput">中文释义:</label>
-                <textarea id="meaningInput" placeholder="输入中文文章内容" rows="5"></textarea>
-            </div>
-
-            <div class="form-buttons">
-                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
-                <button class="btn btn-save" onclick="saveWord()">保存</button>
-            </div>
-        </div>
-    </div>
     
     <script src="js/sentence.js"></script>
 </body>

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>单词表</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -15,9 +16,7 @@
             <div class="tab-container">
                 <a href="index.html" class="tab active">单词表</a>
                 <a href="wordgame.html" class="tab">单词连连看</a>
-                <a href="typing.html" class="tab">打字练习</a>
                 <a href="sentence.html" class="tab">句子练习</a>
-                <a href="balloongame.html" class="tab">气球射击游戏</a>
             </div>
         </div>
         
@@ -27,8 +26,12 @@
                 <input type="text" id="searchInput" placeholder="搜索单词..." onkeyup="searchWords()">
             </div>
             <div class="action-buttons">
-                <button class="add-btn" onclick="showAddModal()">+ 添加单词</button>
-                <button class="save-btn" onclick="saveChanges()">💾 保存</button>
+                <button class="add-btn" onclick="exportToExcel()">📥 导出Excel</button>
+                <label class="add-btn" style="cursor: pointer;">
+                    📤 导入Excel
+                    <input type="file" accept=".xlsx,.xls" onchange="importFromExcel(event)" style="display:none;">
+                </label>
+                <button class="add-btn" onclick="resetToJson()">🔄 重置数据</button>
             </div>
         </div>
         
@@ -89,14 +92,6 @@
                     <option value="az">a-z</option>
                 </select>
             </div>
-            <div class="filter-group">
-                <label for="killBgColor">已斩背景:</label>
-                <input type="color" id="killBgColor" value="#e8f5e9" onchange="updateKillWordStyle()">
-            </div>
-            <div class="filter-group">
-                <label for="killTextColor">已斩字体:</label>
-                <input type="color" id="killTextColor" value="#2e7d32" onchange="updateKillWordStyle()">
-            </div>
         </div>
         
         <div class="stats">
@@ -117,69 +112,6 @@
                 <div class="word-list" id="killWordContainer">
                     <div class="loading">加载中...</div>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2 id="modalTitle">添加单词</h2>
-            <div class="form-group">
-                <label for="wordInput">英文单词:</label>
-                <input type="text" id="wordInput" placeholder="输入英文单词">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="gradeInput">grade:</label>
-                    <select id="gradeInput">
-                        <option value="7上" selected>7上</option>
-                        <option value="7下">7下</option>
-                        <option value="8上">8上</option>
-                        <option value="8下">8下</option>
-                        <option value="9上">9上</option>
-                        <option value="9下">9下</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="unitInput">unit:</label>
-                    <select id="unitInput">
-                        <option value="1" selected>1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="posInput">词性:</label>
-                    <input type="text" id="posInput" placeholder="输入词性（如n. v.）">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="phoneticInput">音标:</label>
-                    <input type="text" id="phoneticInput" placeholder="输入音标">
-                </div>
-            </div>
-            <div class="form-group">
-                <label for="meaningInput">释义:</label>
-                <input type="text" id="meaningInput" placeholder="输入中文释义">
-            </div>
-            <div class="form-group">
-                <label for="exampleInput">例句:</label>
-                <textarea id="exampleInput" placeholder="输入例句，Shift+Enter换行" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="relatedInput">联想词:</label>
-                <input type="text" id="relatedInput" placeholder="输入联想词">
-            </div>
-            <div class="form-buttons">
-                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
-                <button class="btn btn-save" onclick="saveWord()">保存</button>
             </div>
         </div>
     </div>

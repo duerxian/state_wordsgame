@@ -1,21 +1,5 @@
-const API_BASE_URL = 'http://localhost:5000/api/words';
 let words = [];
-let currentEditId = null;
 let currentTooltipWord = null;
-
-// 模拟数据，用于测试语言筛选功能
-const mockWords = [
-    { id: 1, word: 'apple', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '苹果' },
-    { id: 2, word: 'banana', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '香蕉' },
-    { id: 3, word: 'cat', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '猫' },
-    { id: 4, word: 'dog', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '狗' },
-    { id: 5, word: 'elephant', kill: false, grade: '8上', unit: '3', pos: 'n.', meaning: '大象' },
-    { id: 6, word: 'fish', kill: false, grade: '8上', unit: '3', pos: 'n.', meaning: '鱼' },
-    { id: 7, word: 'grape', kill: true, grade: '8上', unit: '4', pos: 'n.', meaning: '葡萄' },
-    { id: 8, word: 'house', kill: true, grade: '8上', unit: '4', pos: 'n.', meaning: '房子' },
-    { id: 9, word: 'ice cream', kill: false, grade: '8上', unit: '5', pos: 'n.', meaning: '冰淇淋' },
-    { id: 10, word: 'jacket', kill: false, grade: '8上', unit: '5', pos: 'n.', meaning: '夹克衫' }
-];
 
 // 使用Web Speech API播放单词发音 - 优化版本
 function speakWord(word) {
@@ -47,18 +31,32 @@ function speakWord(word) {
     }
 }
 
+// 从JSON文件加载单词数据
 async function loadWords() {
     try {
-        const response = await fetch(API_BASE_URL);
+        const response = await fetch('words.json');
         words = await response.json();
+        console.log("✅ 成功加载单词数据，共 " + words.length + " 个单词");
         populatePosFilter();
         applyFilters();
         updateStats();
         initDragAndDrop();
     } catch (error) {
         console.error('加载单词失败:', error);
-        // 使用模拟数据进行测试
-        words = mockWords;
+        // 使用内置的模拟数据
+        words = [
+            { id: 1, word: 'apple', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '苹果' },
+            { id: 2, word: 'banana', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '香蕉' },
+            { id: 3, word: 'cat', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '猫' },
+            { id: 4, word: 'dog', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '狗' },
+            { id: 5, word: 'elephant', kill: false, grade: '8上', unit: '3', pos: 'n.', meaning: '大象' },
+            { id: 6, word: 'fish', kill: false, grade: '8上', unit: '3', pos: 'n.', meaning: '鱼' },
+            { id: 7, word: 'grape', kill: true, grade: '8上', unit: '4', pos: 'n.', meaning: '葡萄' },
+            { id: 8, word: 'house', kill: true, grade: '8上', unit: '4', pos: 'n.', meaning: '房子' },
+            { id: 9, word: 'ice cream', kill: false, grade: '8上', unit: '5', pos: 'n.', meaning: '冰淇淋' },
+            { id: 10, word: 'jacket', kill: false, grade: '8上', unit: '5', pos: 'n.', meaning: '夹克衫' }
+        ];
+        console.log("⚠️ 使用内置模拟数据，共 " + words.length + " 个单词");
         populatePosFilter();
         applyFilters();
         updateStats();
@@ -70,7 +68,6 @@ function populatePosFilter() {
     const posSet = new Set();
     words.forEach(word => {
         if (word.pos) {
-            // 处理多种分隔符：顿号、斜杠、逗号
             const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
             posList.forEach(pos => {
                 if (pos) posSet.add(pos);
@@ -104,7 +101,6 @@ function applyFilters() {
     
     if (unitFilter) {
         filteredWords = filteredWords.filter(word => {
-            // 处理unit类型不匹配的问题，将两者都转换为字符串进行比较
             return String(word.unit) === unitFilter;
         });
     }
@@ -112,23 +108,19 @@ function applyFilters() {
     if (posFilter) {
         filteredWords = filteredWords.filter(word => {
             if (!word.pos) return false;
-            // 处理多种分隔符：顿号、斜杠、逗号
             const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
             return posList.includes(posFilter);
         });
     }
     
-    // 排序
     if (sortFilter === 'az') {
         filteredWords.sort((a, b) => a.word.localeCompare(b.word));
     } else if (sortFilter === 'random') {
-        // 随机排序
         filteredWords.sort(() => Math.random() - 0.5);
     } else {
         filteredWords.sort((a, b) => a.id - b.id);
     }
     
-    // 去重逻辑
     const seenWords = new Set();
     filteredWords = filteredWords.filter(word => {
         const wordKey = word.word.toLowerCase();
@@ -159,7 +151,6 @@ function initDragAndDrop() {
         section.addEventListener('drop', handleDrop);
     });
     
-    // 点击空白处隐藏浮动框
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.word-card') && !e.target.closest('.word-tooltip')) {
             hideWordTooltip();
@@ -206,28 +197,42 @@ function handleDrop(e) {
     draggedWord.element.style.opacity = '1';
     draggedWord = null;
     initDragAndDrop();
+    saveToLocalStorage();
 }
 
-async function saveChanges() {
-    if (!confirm('确定要保存所有更改吗？这将更新Excel文件。')) {
-        return;
-    }
-    
+function saveToLocalStorage() {
     try {
-        const response = await fetch(`${API_BASE_URL}/save-all`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ words: words })
-        });
-        
-        if (response.ok) {
-            alert('保存成功！所有更改已同步到Excel文件。');
-        } else {
-            alert('保存失败，请重试');
+        localStorage.setItem('wordsgame_words', JSON.stringify(words));
+        console.log("💾 数据已保存到本地存储");
+    } catch (e) {
+        console.error("保存失败:", e);
+    }
+}
+
+function loadFromLocalStorage() {
+    try {
+        const saved = localStorage.getItem('wordsgame_words');
+        if (saved) {
+            words = JSON.parse(saved);
+            console.log("📂 从本地存储加载了数据");
+            return true;
         }
-    } catch (error) {
-        console.error('保存失败:', error);
-        alert('保存失败，请重试');
+    } catch (e) {
+        console.error("加载失败:", e);
+    }
+    return false;
+}
+
+function resetToJson() {
+    if (confirm('确定要重置数据吗？这将清除所有本地修改，重新从8上-下单词表.xlsx加载数据。')) {
+        localStorage.removeItem('wordsgame_words');
+        loadLocalExcel().then(() => {
+            // 如果Excel加载失败，使用默认数据
+            if (words.length === 0) {
+                loadWords();
+            }
+            alert('数据已重置！');
+        });
     }
 }
 
@@ -247,16 +252,14 @@ function renderWords(wordList, languageFilter = 'english') {
         normalContainer.innerHTML = normalWords.map(word => {
             let displayText = word.word;
             if (languageFilter === 'meaning') {
-                // 尝试不同的释义字段名
                 const meaning = word.meaning || word['中文释义'] || word['释义'] || '';
-                displayText = meaning ? `${meaning}` : word.word;
+                displayText = meaning ? meaning : word.word;
             }
             const wordWrapClass = languageFilter === 'meaning' ? ' word-wrap' : '';
             return `
             <div class="word-card ${word.check ? 'checked-word' : ''}" data-id="${word.id}">
                 <span class="word-text${wordWrapClass}">${displayText}</span>
                 <input type="checkbox" class="check-box" onchange="toggleCheck(${word.id})" ${word.check ? 'checked' : ''}>
-                <div class="edit-btn" onclick="editWord(${word.id})" title="编辑单词">✏️</div>
             </div>
         `;
         }).join('');
@@ -268,21 +271,18 @@ function renderWords(wordList, languageFilter = 'english') {
         killContainer.innerHTML = killWords.map(word => {
             let displayText = word.word;
             if (languageFilter === 'meaning') {
-                // 尝试不同的释义字段名
                 const meaning = word.meaning || word['中文释义'] || word['释义'] || '';
-                displayText = meaning ? `${meaning}` : word.word;
+                displayText = meaning ? meaning : word.word;
             }
             const wordWrapClass = languageFilter === 'meaning' ? ' word-wrap' : '';
             return `
             <div class="word-card kill-word ${word.check ? 'checked-word' : ''}" data-id="${word.id}">
                 <span class="word-text${wordWrapClass}">${displayText}</span>
                 <input type="checkbox" class="check-box" onchange="toggleCheck(${word.id})" ${word.check ? 'checked' : ''}>
-                <div class="edit-btn" onclick="editWord(${word.id})" title="编辑单词">✏️</div>
             </div>
         `;
         }).join('');
     }
-    updateKillWordStyle();
 }
 
 function updateStats(filteredWords = words) {
@@ -291,269 +291,63 @@ function updateStats(filteredWords = words) {
     document.getElementById('killWords').textContent = filteredWords.filter(word => word.kill).length;
 }
 
-async function searchWords() {
-    const query = document.getElementById('searchInput').value.trim();
+function searchWords() {
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
     
     if (!query) {
         applyFilters();
         return;
     }
     
-    try {
-        const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const results = await response.json();
-        
-        const gradeFilter = document.getElementById('gradeFilter').value;
-        const unitFilter = document.getElementById('unitFilter').value;
-        const languageFilter = document.getElementById('languageFilter').value;
-        const posFilter = document.getElementById('posFilter').value;
-        const sortFilter = document.getElementById('sortFilter').value;
-        
-        let filteredResults = [...results];
-        
-        if (gradeFilter) {
-            filteredResults = filteredResults.filter(word => word.grade === gradeFilter);
-        }
-        
-        if (unitFilter) {
-            filteredResults = filteredResults.filter(word => {
-                // 处理unit类型不匹配的问题，将两者都转换为字符串进行比较
-                return String(word.unit) === unitFilter;
-            });
-        }
-        
-        if (posFilter) {
-            filteredResults = filteredResults.filter(word => {
-                if (!word.pos) return false;
-                // 处理多种分隔符：顿号、斜杠、逗号
-                const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
-                return posList.includes(posFilter);
-            });
-        }
-        
-        if (sortFilter === 'az') {
-            filteredResults.sort((a, b) => a.word.localeCompare(b.word));
-        } else if (sortFilter === 'random') {
-            // 随机排序
-            filteredResults.sort(() => Math.random() - 0.5);
-        } else {
-            filteredResults.sort((a, b) => a.id - b.id);
-        }
-        
-        renderWords(filteredResults, languageFilter);
-        updateStats(filteredResults);
-        initDragAndDrop();
-    } catch (error) {
-        console.error('搜索失败:', error);
-        // 本地搜索备选方案
-        const lowerQuery = query.toLowerCase();
-        const localResults = words.filter(word => {
-            return word.word.toLowerCase().includes(lowerQuery) ||
-                   (word.meaning && word.meaning.toLowerCase().includes(lowerQuery)) ||
-                   (word.example && word.example.toLowerCase().includes(lowerQuery)) ||
-                   (word.related && word.related.toLowerCase().includes(lowerQuery));
+    const results = words.filter(word => {
+        return word.word.toLowerCase().includes(query) ||
+               (word.meaning && word.meaning.toLowerCase().includes(query)) ||
+               (word.example && word.example.toLowerCase().includes(query)) ||
+               (word.related && word.related.toLowerCase().includes(query));
+    });
+    
+    const gradeFilter = document.getElementById('gradeFilter').value;
+    const unitFilter = document.getElementById('unitFilter').value;
+    const languageFilter = document.getElementById('languageFilter').value;
+    const posFilter = document.getElementById('posFilter').value;
+    const sortFilter = document.getElementById('sortFilter').value;
+    
+    let filteredResults = [...results];
+    
+    if (gradeFilter) {
+        filteredResults = filteredResults.filter(word => word.grade === gradeFilter);
+    }
+    
+    if (unitFilter) {
+        filteredResults = filteredResults.filter(word => {
+            return String(word.unit) === unitFilter;
         });
-        
-        const gradeFilter = document.getElementById('gradeFilter').value;
-        const unitFilter = document.getElementById('unitFilter').value;
-        const languageFilter = document.getElementById('languageFilter').value;
-        const posFilter = document.getElementById('posFilter').value;
-        const sortFilter = document.getElementById('sortFilter').value;
-        
-        let filteredResults = [...localResults];
-        
-        if (gradeFilter) {
-            filteredResults = filteredResults.filter(word => word.grade === gradeFilter);
-        }
-        
-        if (unitFilter) {
-            filteredResults = filteredResults.filter(word => {
-                return String(word.unit) === unitFilter;
-            });
-        }
-        
-        if (posFilter) {
-            filteredResults = filteredResults.filter(word => {
-                if (!word.pos) return false;
-                const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
-                return posList.includes(posFilter);
-            });
-        }
-        
-        if (sortFilter === 'az') {
-            filteredResults.sort((a, b) => a.word.localeCompare(b.word));
-        } else if (sortFilter === 'random') {
-            filteredResults.sort(() => Math.random() - 0.5);
-        } else {
-            filteredResults.sort((a, b) => a.id - b.id);
-        }
-        
-        renderWords(filteredResults, languageFilter);
-        updateStats(filteredResults);
-        initDragAndDrop();
-    }
-}
-
-function showAddModal() {
-    currentEditId = null;
-    document.getElementById('modalTitle').textContent = '添加单词';
-    document.getElementById('wordInput').value = '';
-    document.getElementById('gradeInput').value = '7上';
-    document.getElementById('unitInput').value = '1';
-    document.getElementById('meaningInput').value = '';
-    document.getElementById('posInput').value = '';
-    document.getElementById('phoneticInput').value = '';
-    document.getElementById('exampleInput').value = '';
-    document.getElementById('relatedInput').value = '';
-    document.getElementById('modal').style.display = 'block';
-    document.getElementById('wordInput').focus();
-}
-
-function editWord(id) {
-    const word = words.find(w => w.id === id);
-    if (!word) return;
-    
-    currentEditId = id;
-    document.getElementById('modalTitle').textContent = '编辑单词';
-    document.getElementById('wordInput').value = word.word;
-    document.getElementById('gradeInput').value = word.grade || '7上';
-    document.getElementById('unitInput').value = word.unit || '1';
-    document.getElementById('meaningInput').value = word.meaning || '';
-    document.getElementById('posInput').value = word.pos || '';
-    document.getElementById('phoneticInput').value = word.phonetic || '';
-    document.getElementById('exampleInput').value = word.example || '';
-    document.getElementById('relatedInput').value = word.related || '';
-    document.getElementById('modal').style.display = 'block';
-    document.getElementById('wordInput').focus();
-}
-
-async function saveWord() {
-    const wordText = document.getElementById('wordInput').value.trim();
-    const grade = document.getElementById('gradeInput').value;
-    const unit = document.getElementById('unitInput').value;
-    const meaning = document.getElementById('meaningInput').value.trim();
-    const pos = document.getElementById('posInput').value.trim();
-    const phonetic = document.getElementById('phoneticInput').value.trim();
-    const example = document.getElementById('exampleInput').value.trim();
-    const related = document.getElementById('relatedInput').value.trim();
-    
-    if (!wordText) {
-        alert('请输入单词内容');
-        return;
     }
     
-    try {
-        if (currentEditId) {
-            const response = await fetch(`${API_BASE_URL}/${currentEditId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    word: wordText,
-                    grade: grade,
-                    unit: unit,
-                    meaning: meaning,
-                    pos: pos,
-                    phonetic: phonetic,
-                    example: example,
-                    related: related
-                })
-            });
-            
-            if (response.ok) {
-                const updatedWord = await response.json();
-                const index = words.findIndex(w => w.id === currentEditId);
-                if (index !== -1) {
-                    words[index] = updatedWord;
-                }
-                if (confirm('修改成功！')) {
-                    closeModal();
-                    applyFilters(); // 应用当前筛选条件
-                    updateStats();
-                }
-            }
-        } else {
-            const response = await fetch(API_BASE_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    word: wordText,
-                    grade: grade,
-                    unit: unit,
-                    meaning: meaning,
-                    pos: pos,
-                    phonetic: phonetic,
-                    example: example,
-                    related: related
-                })
-            });
-            
-            if (response.ok) {
-                const newWord = await response.json();
-                words.push(newWord);
-                if (confirm('添加成功！')) {
-                    closeModal();
-                    applyFilters(); // 应用当前筛选条件
-                    updateStats();
-                }
-            } else if (response.status === 400) {
-                const error = await response.json();
-                alert(error.error);
-                return;
-            }
-        }
-    } catch (error) {
-        console.error('保存失败:', error);
-    }
-}
-
-async function deleteWord(id) {
-    if (!confirm('确定要删除这个单词吗？')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE_URL}/${id}`, {
-            method: 'DELETE'
+    if (posFilter) {
+        filteredResults = filteredResults.filter(word => {
+            if (!word.pos) return false;
+            const posList = word.pos.split(/[、\/，,]+/).map(p => p.trim());
+            return posList.includes(posFilter);
         });
-        
-        if (response.ok) {
-            words = words.filter(w => w.id !== id);
-            renderWords(words);
-            updateStats();
-        }
-    } catch (error) {
-        console.error('删除失败:', error);
-        alert('删除失败，请重试');
     }
-}
-
-function closeModal() {
-    document.getElementById('modal').style.display = 'none';
-    currentEditId = null;
-}
-
-// 阻止点击空白区域关闭对话框
-document.getElementById('modal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        e.stopPropagation();
+    
+    if (sortFilter === 'az') {
+        filteredResults.sort((a, b) => a.word.localeCompare(b.word));
+    } else if (sortFilter === 'random') {
+        filteredResults.sort(() => Math.random() - 0.5);
+    } else {
+        filteredResults.sort((a, b) => a.id - b.id);
     }
-});
-
-window.onclick = function(event) {
-    const modal = document.getElementById('modal');
-    // 不允许点击空白区域关闭对话框
+    
+    renderWords(filteredResults, languageFilter);
+    updateStats(filteredResults);
+    initDragAndDrop();
 }
-
-document.getElementById('wordInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        saveWord();
-    }
-});
 
 function handleWordClick(e) {
     e.stopPropagation();
-    if (e.target.closest('.edit-btn') || e.target.closest('.check-box')) {
+    if (e.target.closest('.check-box')) {
         return;
     }
     const card = this;
@@ -561,18 +355,14 @@ function handleWordClick(e) {
     const word = words.find(w => w.id === wordId);
     if (!word) return;
     
-    // 播放发音并添加视觉反馈
     speakWord(word.word);
     
-    // 添加发音时的视觉反馈
     card.classList.add('speaking');
     setTimeout(() => {
         card.classList.remove('speaking');
     }, 1000);
     
-    // 获取单词框的位置
     const rect = card.getBoundingClientRect();
-    // 显示浮动框，左对齐单词框，间距8像素
     showWordTooltip(word, rect.left, rect.bottom + 8);
     currentTooltipWord = word;
 }
@@ -581,30 +371,10 @@ function toggleCheck(id) {
     const wordIndex = words.findIndex(w => w.id === id);
     if (wordIndex === -1) return;
     
-    // 切换内存状态
-    const newCheckValue = !words[wordIndex].check;
-    words[wordIndex].check = newCheckValue;
+    words[wordIndex].check = !words[wordIndex].check;
     
-    // 立即更新UI，给用户即时反馈
-    applyFilters(); 
-    
-    // 异步保存到服务器
-    fetch(`${API_BASE_URL}/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ check: newCheckValue ? 1 : 0 })
-    })
-    .then(response => {
-        if (!response.ok) {
-            console.error('保存check状态失败');
-            // 可选：如果失败，回滚状态
-            // words[wordIndex].check = !newCheckValue;
-            // applyFilters();
-        }
-    })
-    .catch(error => {
-        console.error('保存check状态网络错误:', error);
-    });
+    applyFilters();
+    saveToLocalStorage();
 }
 
 function showWordTooltip(word, x, y) {
@@ -615,7 +385,6 @@ function showWordTooltip(word, x, y) {
     document.getElementById('tooltip-example').textContent = word.example || '无';
     document.getElementById('tooltip-related').textContent = word.related || '无';
     
-    // 设置浮动框位置紧贴单词框下方
     tooltip.style.left = x + 'px';
     tooltip.style.top = y + 'px';
     tooltip.style.display = 'block';
@@ -627,25 +396,259 @@ function hideWordTooltip() {
     currentTooltipWord = null;
 }
 
-function updateKillWordStyle() {
-    const bgColor = document.getElementById('killBgColor').value;
-    const textColor = document.getElementById('killTextColor').value;
-    
-    // 动态更新已斩单词的样式
-    const killCards = document.querySelectorAll('.word-card.kill-word');
-    killCards.forEach(card => {
-        card.style.backgroundColor = bgColor;
-        card.style.color = textColor;
-    });
+function exportToExcel() {
+    const ws = XLSX.utils.json_to_sheet(words);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "单词表");
+    XLSX.writeFile(wb, "wordsgame.xlsx");
+    alert("导出成功！");
 }
 
-// 页面加载完成后初始化语音引擎
+function importFromExcel(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    console.log('📥 开始导入Excel文件:', file.name);
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            console.log('📊 Excel解析结果:', jsonData);
+            console.log('📊 第一条数据:', jsonData[0]);
+            
+            if (jsonData.length === 0) {
+                alert('Excel文件中没有数据！');
+                return;
+            }
+            
+            // 获取所有可用的列名
+            if (jsonData[0]) {
+                console.log('📋 可用列名:', Object.keys(jsonData[0]));
+            }
+            
+            if (confirm(`成功导入 ${jsonData.length} 个单词，是否替换当前数据？`)) {
+                words = jsonData.map((word, index) => {
+                    // 智能查找列名 - 不区分大小写，包含关键词即可
+                    const getValue = (keywords) => {
+                        for (const key in word) {
+                            const keyLower = key.toLowerCase();
+                            for (const keyword of keywords) {
+                                if (keyLower.includes(keyword.toLowerCase())) {
+                                    return word[key];
+                                }
+                            }
+                        }
+                        return '';
+                    };
+                    
+                    // 尝试获取单词
+                    let wordValue = getValue(['word', '单词', '英文', 'english']);
+                    // 如果没找到，尝试查找包含"英文"或"word"的列
+                    if (!wordValue) {
+                        for (const key in word) {
+                            if (key.includes('英文') || key.toLowerCase().includes('word')) {
+                                wordValue = word[key];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 尝试获取释义
+                    let meaningValue = getValue(['meaning', '释义', '中文', '中文释义']);
+                    // 如果没找到，尝试查找包含"中文"或"meaning"或"释义"的列
+                    if (!meaningValue) {
+                        for (const key in word) {
+                            if (key.includes('中文') || key.toLowerCase().includes('meaning') || key.includes('释义')) {
+                                meaningValue = word[key];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 尝试获取其他字段
+                    const gradeValue = getValue(['grade', '年级']);
+                    const unitValue = getValue(['unit', '单元']);
+                    const posValue = getValue(['pos', '词性']);
+                    const phoneticValue = getValue(['phonetic', '音标']);
+                    const exampleValue = getValue(['example', '例句']);
+                    const relatedValue = getValue(['related', '联想词']);
+                    
+                    // 获取kill状态
+                    let killValue = false;
+                    for (const key in word) {
+                        if (key.toLowerCase().includes('kill') || key.includes('已斩')) {
+                            const val = word[key];
+                            killValue = val === true || val === 'true' || val === 1 || val === '已斩' || val === '已斩杀';
+                            break;
+                        }
+                    }
+                    
+                    console.log(`🔍 处理第${index+1}条: word="${wordValue}", meaning="${meaningValue}"`);
+                    
+                    return {
+                        id: index + 1,
+                        word: wordValue || '',
+                        kill: killValue,
+                        check: false,
+                        grade: gradeValue || '',
+                        unit: unitValue || '',
+                        pos: posValue || '',
+                        meaning: meaningValue || '',
+                        phonetic: phoneticValue || '',
+                        example: exampleValue || '',
+                        related: relatedValue || ''
+                    };
+                }).filter(w => w.word);
+                
+                console.log('✅ 处理后的数据:', words);
+                console.log('✅ 单词数量:', words.length);
+                
+                if (words.length === 0) {
+                    alert('导入失败：没有找到有效的单词数据！请检查Excel文件的列名是否正确。');
+                    return;
+                }
+                
+                populatePosFilter();
+                applyFilters();
+                updateStats();
+                saveToLocalStorage();
+                alert(`导入成功！共导入 ${words.length} 个单词。`);
+            }
+        } catch (error) {
+            console.error('❌ 导入失败:', error);
+            alert('导入失败：' + error.message);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+}
+
+// 加载本地Excel文件
+async function loadLocalExcel() {
+    try {
+        console.log('📂 开始加载本地Excel文件: 8上-下单词表.xlsx');
+        
+        // 使用fetch获取本地Excel文件
+        const response = await fetch('8上-下单词表.xlsx');
+        const data = await response.arrayBuffer();
+        
+        // 解析Excel文件
+        const workbook = XLSX.read(new Uint8Array(data), {type: 'array'});
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        console.log('📊 Excel解析结果:', jsonData);
+        console.log('📊 第一条数据:', jsonData[0]);
+        
+        if (jsonData.length === 0) {
+            console.log('⚠️ Excel文件中没有数据，使用默认数据');
+            return;
+        }
+        
+        // 转换为单词格式
+        words = jsonData.map((word, index) => {
+            // 智能查找列名
+            const getValue = (keywords) => {
+                for (const key in word) {
+                    const keyLower = key.toLowerCase();
+                    for (const keyword of keywords) {
+                        if (keyLower.includes(keyword.toLowerCase())) {
+                            return word[key];
+                        }
+                    }
+                }
+                return '';
+            };
+            
+            // 尝试获取单词
+            let wordValue = getValue(['word', '单词', '英文', 'english']);
+            if (!wordValue) {
+                for (const key in word) {
+                    if (key.includes('英文') || key.toLowerCase().includes('word')) {
+                        wordValue = word[key];
+                        break;
+                    }
+                }
+            }
+            
+            // 尝试获取释义
+            let meaningValue = getValue(['meaning', '释义', '中文', '中文释义']);
+            if (!meaningValue) {
+                for (const key in word) {
+                    if (key.includes('中文') || key.toLowerCase().includes('meaning') || key.includes('释义')) {
+                        meaningValue = word[key];
+                        break;
+                    }
+                }
+            }
+            
+            // 尝试获取其他字段
+            const gradeValue = getValue(['grade', '年级']);
+            const unitValue = getValue(['unit', '单元']);
+            const posValue = getValue(['pos', '词性']);
+            const phoneticValue = getValue(['phonetic', '音标']);
+            const exampleValue = getValue(['example', '例句']);
+            const relatedValue = getValue(['related', '联想词']);
+            
+            // 获取kill状态
+            let killValue = false;
+            for (const key in word) {
+                if (key.toLowerCase().includes('kill') || key.includes('已斩')) {
+                    const val = word[key];
+                    killValue = val === true || val === 'true' || val === 1 || val === '已斩' || val === '已斩杀';
+                    break;
+                }
+            }
+            
+            return {
+                id: index + 1,
+                word: wordValue || '',
+                kill: killValue,
+                check: false,
+                grade: gradeValue || '',
+                unit: unitValue || '',
+                pos: posValue || '',
+                meaning: meaningValue || '',
+                phonetic: phoneticValue || '',
+                example: exampleValue || '',
+                related: relatedValue || ''
+            };
+        }).filter(w => w.word);
+        
+        console.log('✅ 处理后的数据:', words);
+        console.log('✅ 单词数量:', words.length);
+        
+        if (words.length === 0) {
+            console.log('⚠️ 没有找到有效的单词数据，使用默认数据');
+            return;
+        }
+        
+        // 更新页面
+        populatePosFilter();
+        applyFilters();
+        updateStats();
+        initDragAndDrop();
+        saveToLocalStorage();
+        console.log('✅ 本地Excel文件加载成功！');
+        
+    } catch (error) {
+        console.error('❌ 加载本地Excel文件失败:', error);
+        // 如果加载失败，使用默认数据
+        console.log('⚠️ 加载本地Excel文件失败，使用默认数据');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    // 唤醒语音引擎 - 确保语音列表已加载
     if ('speechSynthesis' in window) {
         window.speechSynthesis.getVoices();
         
-        // Chrome需要等待语音加载完成
         if (window.speechSynthesis.onvoiceschanged !== undefined) {
             window.speechSynthesis.onvoiceschanged = () => {
                 console.log('✅ 语音引擎已就绪');
@@ -653,7 +656,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    console.log('📄 主页已加载');
+    console.log('📂 主页已加载');
+    
+    // 先尝试从本地存储加载
+    if (!loadFromLocalStorage()) {
+        // 如果本地存储没有数据，加载本地Excel文件
+        loadLocalExcel().then(() => {
+            // 如果Excel加载失败，使用默认数据
+            if (words.length === 0) {
+                loadWords();
+            }
+        });
+    } else {
+        populatePosFilter();
+        applyFilters();
+        updateStats();
+        initDragAndDrop();
+    }
 });
 
-loadWords();
+if (typeof words === 'undefined' || words.length === 0) {
+    loadWords();
+}

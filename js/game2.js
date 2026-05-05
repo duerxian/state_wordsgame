@@ -1,36 +1,8 @@
-const API_BASE_URL = 'http://localhost:5000/api/words';
 let words = [];
 let filteredWords = [];
 let currentWordIndex = 0;
 let correctCount = 0;
 
-
-// 🎵 音频对象预加载
-const sounds = {
-    click: new Audio('/sounds/click01.mp3'),
-    correct: new Audio('/sounds/correct.mp3'),
-    wrong: new Audio('/sounds/wrong.mp3'),
-    success: new Audio('/sounds/success.mp3')
-};
-
-// 预加载声音
-function preloadSounds() {
-    Object.values(sounds).forEach(sound => {
-        sound.load();
-        sound.volume = 1; // 设置音量
-    });
-}
-
-// 播放声音
-function playSound(soundName) {
-    const sound = sounds[soundName];
-    if (sound) {
-        sound.currentTime = 0; // 重置播放位置
-        sound.play().catch(e => console.log('声音播放失败:', e));
-    }
-}
-
-// 简单的词形还原函数
 function lemmatize(word) {
     if (word.length < 2) {
         return word.toLowerCase();
@@ -59,12 +31,10 @@ function lemmatize(word) {
     return word;
 }
 
-// 检查两个单词是否是同一个词的不同形式
 function isSameWord(word1, word2) {
     return lemmatize(word1) === lemmatize(word2);
 }
 
-// 测试词形还原功能
 function testLemmatize() {
     console.log('=== 测试词形还原 ===');
     console.log('feature ->', lemmatize('feature'));
@@ -73,28 +43,36 @@ function testLemmatize() {
     console.log('=== 测试结束 ===');
 }
 
-// 初始化游戏
-async function initGame() {
+async function loadWords() {
     try {
-        // 🎵 预加载声音
-        preloadSounds();
-        
-        const response = await fetch(`${API_BASE_URL}`);
+        const response = await fetch('words.json');
         words = await response.json();
-        
-        console.log('=== 游戏初始化 ===');
-        console.log('加载单词数量:', words.length);
-        
-        testLemmatize();
-        
-        applyFilters();
-        initInputEvents();
+        console.log("✅ 成功加载单词数据，共 " + words.length + " 个单词");
     } catch (error) {
-        console.error('初始化游戏失败:', error);
+        console.error('加载单词失败:', error);
+        words = [
+            { id: 1, word: 'apple', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '苹果', example: 'I like to eat apples.' },
+            { id: 2, word: 'banana', kill: false, grade: '8上', unit: '1', pos: 'n.', meaning: '香蕉', example: 'Bananas are yellow.' },
+            { id: 3, word: 'cat', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '猫', example: 'The cat is sleeping.' },
+            { id: 4, word: 'dog', kill: true, grade: '8上', unit: '2', pos: 'n.', meaning: '狗', example: 'The dog is barking.' },
+            { id: 5, word: 'elephant', kill: false, grade: '8上', unit: '3', pos: 'n.', meaning: '大象', example: 'An elephant has a long trunk.' }
+        ];
+        console.log("⚠️ 使用内置模拟数据，共 " + words.length + " 个单词");
     }
 }
 
-// 渲染单词
+async function initGame() {
+    await loadWords();
+    
+    console.log('=== 游戏初始化 ===');
+    console.log('加载单词数量:', words.length);
+    
+    testLemmatize();
+    
+    applyFilters();
+    initInputEvents();
+}
+
 function renderWord(word) {
     console.log('renderWord 被调用:', word.word);
     
@@ -139,7 +117,6 @@ function renderWord(word) {
     });
 }
 
-// 初始化输入事件
 function initInputEvents() {
     document.removeEventListener('input', handleInput);
     document.removeEventListener('keydown', handleEnterKey);
@@ -148,14 +125,11 @@ function initInputEvents() {
     document.addEventListener('keydown', handleEnterKey);
 }
 
-// 处理输入事件
 function handleInput(event) {
     const blank = event.target;
-    if (!blank || blank.disabled || blank.tagName !== 'INPUT' || !blank.classList.contains('blank')) return;
-    playSound('click');
+    if (!blank || blank.disabled || blank.tagName !== 'INPUT' || !blank.classList.contains('blank'));
 }
 
-// 处理回车键
 function handleEnterKey(event) {
     if (event.key === 'Enter') {
         const blank = document.querySelector('.blank:not([disabled])');
@@ -166,15 +140,11 @@ function handleEnterKey(event) {
     }
 }
 
-// 统一的验证逻辑
 function validateAnswer(blank) {
     const input = blank.value.trim().toLowerCase();
     const expectedWord = blank.dataset.word.toLowerCase();
     
     if (isSameWord(input, expectedWord)) {
-        // 🎵 播放正确声音
-        playSound('correct');
-        
         blank.disabled = true;
         blank.classList.add('correct');
         correctCount++;
@@ -182,8 +152,6 @@ function validateAnswer(blank) {
         const isComplete = (correctCount === filteredWords.length);
         
         if (isComplete) {
-            // 🎵 播放成功声音
-            playSound('success');
             setTimeout(() => {
                 alert('恭喜！全对了！');
             }, 500);
@@ -197,9 +165,6 @@ function validateAnswer(blank) {
             }
         }, 300);
     } else {
-        // 🎵 播放错误声音
-        playSound('wrong');
-        
         blank.classList.add('error');
         setTimeout(() => {
             blank.classList.remove('error');
@@ -208,7 +173,6 @@ function validateAnswer(blank) {
     }
 }
 
-// 显示单词详情
 function showWordTooltip(word) {
     const tooltip = document.createElement('div');
     tooltip.className = 'word-tooltip';
@@ -237,7 +201,6 @@ function showWordTooltip(word) {
     }, 0);
 }
 
-// 应用筛选条件
 function applyFilters() {
     console.log('=== applyFilters 被调用 ===');
     
@@ -272,7 +235,6 @@ function applyFilters() {
         filteredWords.sort((a, b) => a.id - b.id);
     }
     
-    // ✅ 去重逻辑
     const seenWords = new Set();
     filteredWords = filteredWords.filter(word => {
         const wordKey = word.word.toLowerCase();

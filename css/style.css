@@ -429,6 +429,47 @@ h1 {
     flex: 1;
 }
 
+/* 可点击单词样式 */
+.clickable-word {
+    display: inline-block;
+    padding: 2px 6px;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.clickable-word:hover {
+    color: #2196F3;
+}
+
+.clickable-word:active {
+    background-color: #bbdefb;
+    transform: scale(0.98);
+}
+
+/* 单词激活状态 - 点击后变色 */
+.clickable-word.word-active {
+    color: #000000 !important;
+    font-weight: bold;
+}
+
+/* 单词翻译显示样式 - 在单词正下方 */
+.word-translation {
+    display: block;
+    color: #e24c31;
+    font-size: 14px;
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    white-space: nowrap;
+    min-width: 60px;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: lighter;
+}
+
 .word-actions {
     display: flex;
     gap: 5px;
@@ -779,7 +820,7 @@ h1 {
     color: #e24c31;
     font-size: 14px;
     position: absolute;
-    top: 100%;
+    top: 80%;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
