@@ -222,6 +222,9 @@ async function loadWords() {
 }
 
 async function initGame() {
+    matchedPairs.clear();
+    lastClickedWord = null;
+    
     await loadLocalExcel();
     
     // 如果Excel加载失败，使用默认数据
@@ -430,6 +433,9 @@ function handleWordClick(event) {
 function applyFilters() {
     console.log('=== applyFilters 被调用 ===');
     
+    matchedPairs.clear();
+    lastClickedWord = null;
+    
     const gradeFilter = document.getElementById('gradeFilter').value;
     const unitFilter = document.getElementById('unitFilter').value;
     const killFilter = document.getElementById('posFilter').value;
@@ -472,16 +478,14 @@ function applyFilters() {
         return true;
     });
     
-    document.getElementById('normalWords').textContent = filteredWords.length;
-    
-    currentWordIndex = 0;
-    correctCount = 0;
+    updateStats(filteredWords);
     
     console.log('去重后 filteredWords.length:', filteredWords.length);
     console.log('=== applyFilters 结束 ===\n');
     
     if (filteredWords.length > 0) {
         renderWords(filteredWords, [...filteredWords].sort(() => Math.random() - 0.5));
+        initClickEvents();
     } else {
         document.getElementById('normalWordContainer').innerHTML = '<div class="loading">没有符合条件的单词</div>';
         document.getElementById('killWordContainer').innerHTML = '';

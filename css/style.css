@@ -296,7 +296,7 @@ h1 {
 
 .word-section {
     flex: 1;
-    min-width: 675px;
+    min-width: 455px;
     background-color: #f9f9f9;
     border-radius: 8px;
     padding: 20px;

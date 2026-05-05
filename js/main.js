@@ -143,6 +143,9 @@ function initDragAndDrop() {
         card.addEventListener('dragstart', handleDragStart);
         card.addEventListener('dragend', handleDragEnd);
         card.addEventListener('click', handleWordClick);
+        card.addEventListener('touchstart', handleTouchStart, { passive: false });
+        card.addEventListener('touchmove', handleTouchMove, { passive: false });
+        card.addEventListener('touchend', handleTouchEnd, { passive: false });
     });
     
     const wordSections = document.querySelectorAll('.word-section');
@@ -160,6 +163,11 @@ function initDragAndDrop() {
 
 let draggedWord = null;
 let dragMouseX = 0;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchMoveX = 0;
+let isTouchDragging = false;
+let preventClick = false;
 
 function handleDragStart(e) {
     draggedWord = {
@@ -198,6 +206,75 @@ function handleDrop(e) {
     draggedWord = null;
     initDragAndDrop();
     saveToLocalStorage();
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    isTouchDragging = false;
+    draggedWord = {
+        id: parseInt(this.dataset.id),
+        element: this
+    };
+    this.style.opacity = '0.5';
+    this.style.transition = 'transform 0.1s ease-out';
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    touchMoveX = touch.clientX;
+    
+    if (!isTouchDragging) {
+        const deltaX = Math.abs(touch.clientX - touchStartX);
+        const deltaY = Math.abs(touch.clientY - touchStartY);
+        if (deltaX > 10 || deltaY > 10) {
+            isTouchDragging = true;
+        }
+    }
+    
+    if (isTouchDragging && draggedWord && draggedWord.element) {
+        const translateX = touch.clientX - touchStartX;
+        const translateY = touch.clientY - touchStartY;
+        draggedWord.element.style.transform = `translate(${translateX}px, ${translateY}px)`;
+        draggedWord.element.style.zIndex = '1000';
+    }
+}
+
+function handleTouchEnd(e) {
+    e.preventDefault();
+    
+    if (isTouchDragging) {
+        preventClick = true;
+        setTimeout(() => {
+            preventClick = false;
+        }, 300);
+    }
+    
+    if (draggedWord && draggedWord.element) {
+        draggedWord.element.style.opacity = '1';
+        draggedWord.element.style.transform = '';
+        draggedWord.element.style.zIndex = '';
+    }
+    
+    if (isTouchDragging && draggedWord) {
+        const wordIndex = words.findIndex(w => w.id === draggedWord.id);
+        if (wordIndex !== -1) {
+            const screenWidth = window.innerWidth;
+            const isRightSide = touchMoveX > screenWidth / 2;
+            
+            words[wordIndex].kill = isRightSide;
+            
+            applyFilters();
+            initDragAndDrop();
+            saveToLocalStorage();
+        }
+    }
+    
+    draggedWord = null;
+    isTouchDragging = false;
 }
 
 function saveToLocalStorage() {
@@ -347,6 +424,10 @@ function searchWords() {
 
 function handleWordClick(e) {
     e.stopPropagation();
+    if (preventClick) {
+        preventClick = false;
+        return;
+    }
     if (e.target.closest('.check-box')) {
         return;
     }
@@ -635,7 +716,6 @@ async function loadLocalExcel() {
         applyFilters();
         updateStats();
         initDragAndDrop();
-        saveToLocalStorage();
         console.log('✅ 本地Excel文件加载成功！');
         
     } catch (error) {
@@ -658,21 +738,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('📂 主页已加载');
     
-    // 先尝试从本地存储加载
-    if (!loadFromLocalStorage()) {
-        // 如果本地存储没有数据，加载本地Excel文件
-        loadLocalExcel().then(() => {
-            // 如果Excel加载失败，使用默认数据
-            if (words.length === 0) {
+    // 优先从本地Excel文件加载数据，而不是从localStorage加载
+    loadLocalExcel().then(() => {
+        // 如果Excel加载失败，尝试从localStorage加载
+        if (words.length === 0) {
+            if (!loadFromLocalStorage()) {
+                // 如果localStorage也没有数据，使用默认数据
                 loadWords();
             }
-        });
-    } else {
-        populatePosFilter();
-        applyFilters();
-        updateStats();
-        initDragAndDrop();
-    }
+        }
+    });
 });
 
 if (typeof words === 'undefined' || words.length === 0) {

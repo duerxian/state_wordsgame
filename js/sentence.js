@@ -1,4 +1,5 @@
 let articles = [];
+let originalArticles = []; // 存储原始文章数据
 let currentSelectedArticle = null;
 let words = []; // 存储单词数据用于翻译查询
 
@@ -91,6 +92,8 @@ async function loadLocalExcel() {
         console.log('✅ 处理后的数据:', articles);
         console.log('✅ 文章数量:', articles.length);
         
+        originalArticles = [...articles]; // 保存原始数据
+        
         if (articles.length === 0) {
             console.log('⚠️ 没有找到有效的文章数据，使用默认数据');
             return;
@@ -112,6 +115,7 @@ async function loadArticles() {
     try {
         const response = await fetch('articles.json');
         articles = await response.json();
+        originalArticles = [...articles];
         renderArticles();
     } catch (error) {
         console.error('加载文章失败:', error);
@@ -160,20 +164,21 @@ async function loadArticles() {
                 "meaning": "就这些了。谢谢！"
             }
         ];
+        originalArticles = [...articles];
         renderArticles();
     }
 }
 
-function renderArticles() {
+function renderArticles(dataToRender = articles) {
     const container = document.getElementById('normalWordContainer');
     container.innerHTML = '';
     
-    if (articles.length === 0) {
+    if (dataToRender.length === 0) {
         container.innerHTML = '<div class="no-data">没有文章</div>';
         return;
     }
     
-    articles.forEach(article => {
+    dataToRender.forEach(article => {
         const articleCard = document.createElement('div');
         articleCard.className = 'word-card full-width';
         articleCard.dataset.id = article.id;
@@ -190,6 +195,75 @@ function renderArticles() {
         
         container.appendChild(articleCard);
     });
+}
+
+function applyFilters() {
+    const gradeFilter = document.getElementById('gradeFilter').value;
+    const unitFilter = document.getElementById('unitFilter').value;
+    const languageFilter = document.getElementById('languageFilter').value;
+    const sortFilter = document.getElementById('sortFilter').value;
+    const killFilter = document.getElementById('killFilter').value;
+    const checkFilter = document.getElementById('checkFilter').value;
+    
+    let filteredArticles = [...originalArticles];
+    
+    // 年级筛选
+    if (gradeFilter) {
+        filteredArticles = filteredArticles.filter(article => article.grade === gradeFilter);
+    }
+    
+    // 单元筛选
+    if (unitFilter) {
+        filteredArticles = filteredArticles.filter(article => String(article.unit) === unitFilter);
+    }
+    
+    // Kill状态筛选
+    if (killFilter === 'kill') {
+        filteredArticles = filteredArticles.filter(article => article.kill === true);
+    } else if (killFilter === 'no-kill') {
+        filteredArticles = filteredArticles.filter(article => article.kill !== true);
+    }
+    
+    // Check状态筛选
+    if (checkFilter === 'checked') {
+        filteredArticles = filteredArticles.filter(article => article.check === 1 || article.check === true);
+    } else if (checkFilter === 'unchecked') {
+        filteredArticles = filteredArticles.filter(article => article.check !== 1 && article.check !== true);
+    }
+    
+    // 排序
+    if (sortFilter === 'az') {
+        filteredArticles.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    } else if (sortFilter === 'random') {
+        filteredArticles.sort(() => Math.random() - 0.5);
+    }
+    
+    articles = filteredArticles;
+    renderArticles(filteredArticles);
+}
+
+function searchSentences() {
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    
+    if (!query) {
+        applyFilters();
+        return;
+    }
+    
+    const results = originalArticles.filter(article => {
+        const title = (article.title || '').toLowerCase();
+        const english = (article.english || '').toLowerCase();
+        const meaning = (article.meaning || '').toLowerCase();
+        const content = (article.content || '').toLowerCase();
+        
+        return title.includes(query) || 
+               english.includes(query) || 
+               meaning.includes(query) || 
+               content.includes(query);
+    });
+    
+    articles = results;
+    renderArticles(results);
 }
 
 function showArticleContent(article) {
