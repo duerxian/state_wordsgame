@@ -87,7 +87,17 @@
                     <option value="checked">checked</option>
                 </select>
             </div>
-
+            <!-- 语音控制面板 -->
+            <div class="filter-group voice-control-wrapper">
+                <div class="voice-control" id="voicePanel" style="display:none;">
+                    <label>音色：</label>
+                    <select id="voiceSelect"></select>
+                    
+                    <label>语速：</label>
+                    <input type="range" id="rateControl" min="0.5" max="2" step="0.1" value="0.8">
+                    <span id="rateText">0.8x</span>
+                </div>
+            </div>
         </div>
 
         <div class="word-container">
@@ -104,10 +114,13 @@
                 </div>
             </div>
         </div>
+        
+
     </div>
     
 
     
     <script src="js/sentence.js"></script>
+    <script src="js/read_sentence.js"></script>
 </body>
 </html>
