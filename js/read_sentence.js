@@ -27,26 +27,36 @@ class ReadSentence {
     }
 
     /**
-     * 初始化语音列表，包含Microsoft、Chrome OS US English、Google US English和Natural语音
+     * 初始化语音列表，优先显示高质量语音，如果没有则显示所有可用语音
      */
     loadVoices() {
         if (!this.synth) return;
         
         this.voices = this.synth.getVoices();
         
-        // 筛选所有name含有"Microsoft"、"Chrome OS US English"、"Google US English"或"(Natural)"的语音
-        this.displayVoices = this.voices.filter(v => 
+        // 优先筛选高质量语音
+        let filtered = this.voices.filter(v => 
             v.name.includes('Microsoft') || 
             v.name.includes('Chrome OS US English') ||
             v.name.includes('Google US English') ||
             v.name.includes('(Natural)')
         );
         
+        // 如果筛选结果为空，显示所有可用语音
+        if (filtered.length === 0) {
+            filtered = this.voices;
+        }
+        
+        // 优先显示英文语音
+        const englishVoices = filtered.filter(v => v.lang.startsWith('en'));
+        const otherVoices = filtered.filter(v => !v.lang.startsWith('en'));
+        this.displayVoices = [...englishVoices, ...otherVoices];
+        
         return this.displayVoices;
     }
 
     /**
-     * 将语音列表填充到select元素，并设置默认选中 David
+     * 将语音列表填充到select元素，并设置默认选中合适的英文语音
      */
     populateVoiceSelect(selectElement) {
         if (!selectElement) return;
@@ -68,28 +78,40 @@ class ReadSentence {
             selectElement.appendChild(option);
         });
         
-        // 查找 US English 8 的索引并选中
+        // 按优先级选择默认语音
+        let defaultIndex = 0;
+        
+        // 1. 优先找 US English 8
         const usEnglish8Index = voices.findIndex(v => 
             v.name.includes('US English 8') && v.lang === 'en-US'
         );
         if (usEnglish8Index !== -1) {
-            selectElement.value = usEnglish8Index;
-            this.voiceIndex = usEnglish8Index;
+            defaultIndex = usEnglish8Index;
         } else {
-            // 如果没有 US English 8，查找 David
+            // 2. 找 David
             const davidIndex = voices.findIndex(v => 
                 v.name.includes('David') && v.lang === 'en-US'
             );
             if (davidIndex !== -1) {
-                selectElement.value = davidIndex;
-                this.voiceIndex = davidIndex;
+                defaultIndex = davidIndex;
             } else {
-                // 如果都没有，使用第一个
-                selectElement.value = 0;
-                this.voiceIndex = 0;
+                // 3. 找任意 en-US 语音
+                const enUsIndex = voices.findIndex(v => v.lang === 'en-US');
+                if (enUsIndex !== -1) {
+                    defaultIndex = enUsIndex;
+                } else {
+                    // 4. 找任意英文语音
+                    const enIndex = voices.findIndex(v => v.lang.startsWith('en'));
+                    if (enIndex !== -1) {
+                        defaultIndex = enIndex;
+                    }
+                    // 5. 否则使用第一个
+                }
             }
         }
         
+        selectElement.value = defaultIndex;
+        this.voiceIndex = defaultIndex;
         this.elements.voiceSelect = selectElement;
     }
 
