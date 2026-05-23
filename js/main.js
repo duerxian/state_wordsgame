@@ -747,24 +747,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('📂 主页已加载');
     
-    // 检测环境：本地优先加载Excel，GitHub Pages加载JSON
-    const isGitHubPages = window.location.hostname.includes('github.io');
-    
-    if (isGitHubPages) {
-        console.log('🚀 检测到GitHub Pages环境，加载words.json');
-        loadWords();
-    } else {
-        console.log('💻 检测到本地环境，优先加载Excel文件');
-        loadLocalExcel().then(() => {
-            if (words.length === 0) {
-                console.log('📄 Excel加载失败，回退到words.json');
-                loadWords();
-            }
-        }).catch(() => {
-            console.log('📄 Excel加载异常，回退到words.json');
+    // 优先加载Excel，如果失败再回退到words.json
+    console.log('🚀 优先加载Excel文件');
+    loadLocalExcel().then(() => {
+        if (words.length === 0) {
+            console.log('📄 Excel加载失败，回退到words.json');
             loadWords();
-        });
-    }
+        }
+    }).catch(() => {
+        console.log('📄 Excel加载异常，回退到words.json');
+        loadWords();
+    });
 });
 
 if (typeof words === 'undefined' || words.length === 0) {
