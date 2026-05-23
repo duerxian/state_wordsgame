@@ -253,6 +253,7 @@ function handleTouchEnd(e) {
     if (!draggedWord) return;
     e.preventDefault();
     
+    // 只有真正发生拖拽时才阻止后续的点击事件
     if (isTouchDragging) {
         preventClick = true;
         setTimeout(() => {
@@ -278,6 +279,23 @@ function handleTouchEnd(e) {
             applyFilters();
             initDragAndDrop();
             saveToLocalStorage();
+        }
+    } else {
+        // 只是普通点击，手动触发单词点击逻辑（发音+显示提示）
+        const card = draggedWord.element;
+        const wordId = parseInt(card.dataset.id);
+        const word = words.find(w => w.id === wordId);
+        if (word) {
+            speakWord(word.word);
+            
+            card.classList.add('speaking');
+            setTimeout(() => {
+                card.classList.remove('speaking');
+            }, 1000);
+            
+            const rect = card.getBoundingClientRect();
+            showWordTooltip(word, rect.left, rect.bottom + 8);
+            currentTooltipWord = word;
         }
     }
     
