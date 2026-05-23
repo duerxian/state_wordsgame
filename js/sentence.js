@@ -463,19 +463,21 @@ function renderArticleContentPage(article) {
         });
     }
     
-        // 渲染内容
-    let contentHtml = `<div class="article-content"><h3>${article.title || ''}</h3>`;
-    
-    allParagraphs.forEach(paragraph => {
-        if (paragraph.type === 'english') {
-            const clickableText = makeWordsClickable(paragraph.content);
-            contentHtml += `<div class="english-content">${clickableText}</div>`;
-        } else if (paragraph.type === 'chinese') {
-            contentHtml += `<div class="chinese-content"><p>${paragraph.content}</p></div>`;
-        } else {
-            contentHtml += `<div class="content"><p>${paragraph.content}</p></div>`;
-        }
-    });
+        // 渲染内容 - 维护全局单词索引
+        let contentHtml = `<div class="article-content"><h3>${article.title || ''}</h3>`;
+        let globalWordIndex = 0;
+        
+        allParagraphs.forEach(paragraph => {
+            if (paragraph.type === 'english') {
+                const result = makeWordsClickable(paragraph.content, globalWordIndex);
+                contentHtml += `<div class="english-content">${result.html}</div>`;
+                globalWordIndex = result.nextIndex;
+            } else if (paragraph.type === 'chinese') {
+                contentHtml += `<div class="chinese-content"><p>${paragraph.content}</p></div>`;
+            } else {
+                contentHtml += `<div class="content"><p>${paragraph.content}</p></div>`;
+            }
+        });
     
     // 添加朗读控制按钮
     contentHtml += `
@@ -725,13 +727,12 @@ function getTotalParagraphs(article) {
     return count;
 }
 
-function makeWordsClickable(text) {
-    if (!text) return '';
+function makeWordsClickable(text, startIndex = 0) {
+    if (!text) return { html: '', nextIndex: startIndex };
     // 将文本按换行符分割成句子
     const sentences = text.split(/\n+/);
-    let wordIndex = 0;
-    // 为每个句子创建<p>标签，并为每个单词添加可点击事件
-    return sentences.map(sentence => {
+    let wordIndex = startIndex;
+    const html = sentences.map(sentence => {
         if (!sentence.trim()) return '';
         const clickableText = sentence.replace(/([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g, (match) => {
             const html = `<span class="clickable-word" data-word="${match}" data-index="${wordIndex}">${match}</span>`;
@@ -740,6 +741,7 @@ function makeWordsClickable(text) {
         });
         return `<p>${clickableText}</p>`;
     }).join('');
+    return { html, nextIndex: wordIndex };
 }
 
 function attachWordClickEvents() {
